@@ -1,4 +1,4 @@
-package agent
+package model
 
 // StoryChapter 故事章节结构
 type StoryChapter struct {
@@ -8,7 +8,7 @@ type StoryChapter struct {
 
 // Story 故事结构
 type Story struct {
-	Theme    string        `json:"theme"`    // 故事主题
+	Theme    string         `json:"theme"`    // 故事主题
 	Chapters []StoryChapter `json:"chapters"` // 故事章节列表
 }
 
@@ -20,10 +20,10 @@ type ImagePrompt struct {
 
 // AgentState agent状态结构
 type AgentState struct {
-	Story          *Story        `json:"story,omitempty"`           // 生成的故事
-	ConfirmedStory *Story        `json:"confirmed_story,omitempty"` // 用户确认的故事
-	ImagePrompts   []ImagePrompt `json:"image_prompts,omitempty"`   // 图片生成提示词
+	Story           *Story           `json:"story,omitempty"`            // 生成的故事
+	ConfirmedStory  *Story           `json:"confirmed_story,omitempty"`  // 用户确认的故事
+	ImagePrompts    []ImagePrompt    `json:"image_prompts,omitempty"`    // 图片生成提示词
 	GeneratedImages map[int][]string `json:"generated_images,omitempty"` // 生成的图片，key为章节索引
 	ConfirmedImages map[int][]string `json:"confirmed_images,omitempty"` // 用户确认的图片，key为章节索引
-	VideoURL       string        `json:"video_url,omitempty"`       // 最终生成的视频URL
+	VideoURL        string           `json:"video_url,omitempty"`        // 最终生成的视频URL
 }

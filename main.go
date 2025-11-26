@@ -15,8 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"illustration2/internal/agent"
-	"illustration2/internal/volc"
 	"illustration2/internal/tools"
+	"illustration2/internal/volc"
 )
 
 func main() {
@@ -30,6 +30,7 @@ func main() {
 	// 初始化工具
 	imageTool := tools.NewSeedreamTool(arkClient)
 	videoTool := tools.NewSeedanceTool(arkClient)
+	storyTool := tools.NewStoryTool(arkClient)
 
 	// 初始化ChildIllustrationAgent
 	illustrationAgent := agent.NewChildIllustrationAgent(arkClient, imageTool, videoTool)
@@ -40,6 +41,7 @@ func main() {
 	// 添加路由
 	router.POST("/agent/child-illustration", handleAgentRequest(illustrationAgent))
 	router.GET("/agent/child-illustration/info", handleAgentInfo(illustrationAgent))
+	router.POST("/tools/story-generate", handleStoryGenerate(storyTool))
 
 	// 启动服务器
 	srv := &http.Server{
@@ -115,5 +117,27 @@ func handleAgentRequest(illustrationAgent *agent.ChildIllustrationAgent) gin.Han
 func handleAgentInfo(illustrationAgent *agent.ChildIllustrationAgent) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, illustrationAgent.Info())
+	}
+}
+
+// handleStoryGenerate 处理故事生成请求
+func handleStoryGenerate(storyTool *tools.StoryTool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 直接读取请求体作为JSON参数
+		var body []byte
+		if err := c.ShouldBindBodyWithJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求格式"})
+			return
+		}
+
+		// 调用工具生成故事
+		result, err := storyTool.InvokableRun(c.Request.Context(), string(body))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("生成故事失败: %v", err)})
+			return
+		}
+
+		// 返回生成的故事
+		c.Data(http.StatusOK, "application/json", []byte(result))
 	}
 }

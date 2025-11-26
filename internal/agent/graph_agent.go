@@ -7,20 +7,23 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 
+	"illustration2/internal/model"
 	"illustration2/internal/volc"
 )
 
 // SessionState 会话状态
 type SessionState struct {
-	State         string        `json:"state"`          // 当前状态
-	Story         *Story        `json:"story,omitempty"`          // 生成的故事
-	ConfirmedStory *Story        `json:"confirmed_story,omitempty"` // 用户确认的故事
-	ImagePrompts  []ImagePrompt `json:"image_prompts,omitempty"`  // 图片生成提示词
-	GeneratedImages map[int][]string `json:"generated_images,omitempty"` // 生成的图片，key为章节索引
-	ConfirmedImages map[int][]string `json:"confirmed_images,omitempty"` // 用户确认的图片，key为章节索引
-	VideoURL      string        `json:"video_url,omitempty"`      // 最终生成的视频URL
+	State           string              `json:"state"`                      // 当前状态
+	Story           *model.Story        `json:"story,omitempty"`            // 生成的故事
+	ConfirmedStory  *model.Story        `json:"confirmed_story,omitempty"`  // 用户确认的故事
+	ImagePrompts    []model.ImagePrompt `json:"image_prompts,omitempty"`    // 图片生成提示词
+	GeneratedImages map[int][]string    `json:"generated_images,omitempty"` // 生成的图片，key为章节索引
+	ConfirmedImages map[int][]string    `json:"confirmed_images,omitempty"` // 用户确认的图片，key为章节索引
+	VideoURL        string              `json:"video_url,omitempty"`        // 最终生成的视频URL
 }
 
 // ChildIllustrationAgent 儿童插画视频生成助手agent
@@ -66,6 +69,18 @@ func (a *ChildIllustrationAgent) SaveSessionState(sessionID string, state *Sessi
 	defer a.sessionMu.Unlock()
 
 	a.sessions[sessionID] = state
+}
+
+func (a *ChildIllustrationAgent) ChatWithGraph(ctx context.Context, input map[string]any) (map[string]any, error) {
+	template := prompt.FromMessages(schema.FString,
+		schema.SystemMessage("你是一个儿童插画视频生成助手，负责根据用户的主题创作插画视频。"),
+		&schema.Message{
+			Role:    schema.User,
+			Content: "用户提问的主题是：{question}。",
+		})
+	messages, _ := template.Format(ctx, input)
+	fmt.Println(messages)
+	return nil, nil
 }
 
 // Execute 执行agent逻辑
@@ -123,11 +138,11 @@ func (a *ChildIllustrationAgent) generateStory(ctx context.Context, state *Sessi
 	// 调用LLM生成故事
 	prompt := fmt.Sprintf("请为儿童创作一个关于'%s'的插画故事，生成3-5个简短有趣的章节。每个章节包含标题和内容，语言要生动有趣，适合儿童。请以JSON格式返回，包含theme字段和chapters数组，每个chapter包含title和content字段。", theme)
 
-	var story Story
-	model := "ernie-bot"
-	if err := a.ark.ChatJSON(ctx, model, prompt, &story); err != nil {
+	var story model.Story
+	modelName := "ernie-bot"
+	if err := a.ark.ChatJSON(ctx, modelName, prompt, &story); err != nil {
 		// 如果LLM调用失败，使用默认故事
-		story = Story{
+		story = model.Story{
 			Theme:    theme,
 			Chapters: generateDefaultStoryChapters(theme),
 		}
@@ -176,21 +191,21 @@ func (a *ChildIllustrationAgent) generateImagePrompts(ctx context.Context, state
 	}
 
 	// 为每个章节生成图片提示词
-	prompts := make([]ImagePrompt, 0, len(state.ConfirmedStory.Chapters))
-	model := "ernie-bot"
-	
+	prompts := make([]model.ImagePrompt, 0, len(state.ConfirmedStory.Chapters))
+	modelName := "ernie-bot"
+
 	for i, chapter := range state.ConfirmedStory.Chapters {
 		prompt := fmt.Sprintf("请为儿童插画故事生成一个详细的图片提示词，用于生成插画。故事章节标题：'%s'，内容：'%s'。提示词需要包含场景、角色、色彩和风格描述，风格要统一为明亮、可爱、卡通的儿童插画风格，适合4-8岁儿童欣赏。", chapter.Title, chapter.Content)
 
 		var response struct {
 			Prompt string `json:"prompt"`
 		}
-		if err := a.ark.ChatJSON(ctx, model, prompt, &response); err != nil {
+		if err := a.ark.ChatJSON(ctx, modelName, prompt, &response); err != nil {
 			// 如果LLM调用失败，使用默认提示词
 			response.Prompt = fmt.Sprintf("明亮可爱的儿童插画，%s，卡通风格，丰富色彩，适合儿童，清晰细节", chapter.Title)
 		}
 
-		prompts = append(prompts, ImagePrompt{
+		prompts = append(prompts, model.ImagePrompt{
 			ChapterIndex: i,
 			Prompt:       response.Prompt,
 		})
@@ -217,8 +232,8 @@ func (a *ChildIllustrationAgent) generateImages(ctx context.Context, state *Sess
 	for _, prompt := range state.ImagePrompts {
 		// 调用图片生成工具
 		args := map[string]interface{}{
-			"prompt": prompt.Prompt,
-			"size":   "1024x1024",
+			"prompt":                      prompt.Prompt,
+			"size":                        "1024x1024",
 			"sequential_image_generation": "auto",
 		}
 
@@ -323,7 +338,7 @@ func (a *ChildIllustrationAgent) handleComplete(ctx context.Context, state *Sess
 }
 
 // formatStoryForDisplay 格式化故事用于显示
-func (a *ChildIllustrationAgent) formatStoryForDisplay(story Story) string {
+func (a *ChildIllustrationAgent) formatStoryForDisplay(story model.Story) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("主题：%s\n\n", story.Theme))
 
@@ -336,8 +351,8 @@ func (a *ChildIllustrationAgent) formatStoryForDisplay(story Story) string {
 }
 
 // generateDefaultStoryChapters 生成默认故事章节
-func generateDefaultStoryChapters(theme string) []StoryChapter {
-	return []StoryChapter{
+func generateDefaultStoryChapters(theme string) []model.StoryChapter {
+	return []model.StoryChapter{
 		{
 			Title:   fmt.Sprintf("奇妙的%s之旅开始了", theme),
 			Content: fmt.Sprintf("在一个阳光明媚的早晨，小朋友们踏上了寻找%s的奇妙旅程。他们充满好奇，带着期待的心情出发了。", theme),
@@ -358,7 +373,7 @@ func generateDefaultStoryChapters(theme string) []StoryChapter {
 }
 
 // buildVideoPrompt 构建视频生成提示词
-func buildVideoPrompt(story *Story) string {
+func buildVideoPrompt(story *model.Story) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("儿童插画视频，主题：%s\n", story.Theme))
 	builder.WriteString("故事概要：\n")
