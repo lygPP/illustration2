@@ -33,7 +33,7 @@ func main() {
 	storyTool := tools.NewStoryTool(arkClient)
 
 	// 初始化ChildIllustrationAgent
-	illustrationAgent := agent.NewChildIllustrationAgent(arkClient, imageTool, videoTool)
+	illustrationAgent := agent.NewChildIllustrationAgent(arkClient, storyTool, imageTool, videoTool)
 
 	// 初始化Gin路由
 	router := gin.Default()
