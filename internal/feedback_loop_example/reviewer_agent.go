@@ -1,4 +1,4 @@
-package main
+package feedback_loop_example
 
 import (
 	"context"

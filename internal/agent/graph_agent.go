@@ -139,7 +139,7 @@ func (a *ChildIllustrationAgent) ChatWithGraph(ctx context.Context, input map[st
 	graph.AddEdge(compose.START, "chat1")
 	graph.AddEdge("chat1", "record_history")
 	// 分支逻辑
-	graph.AddBranch("record_history", compose.NewGraphBranch[*schema.Message](func(ctx context.Context, input *schema.Message) (endNode string, err error) {
+	graph.AddBranch("record_history", compose.NewGraphBranch[*schema.Message](func(ctx context.Context, input *schema.Message) (node string, err error) {
 		if len(input.ToolCalls) > 0 {
 			return "tools", nil
 		}
