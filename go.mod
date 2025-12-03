@@ -3,7 +3,7 @@ module illustration2
 go 1.24.7
 
 require (
-	github.com/cloudwego/eino v0.7.0
+	github.com/cloudwego/eino v0.7.5-0.20251203070642-da5a23ba5189
 	github.com/cloudwego/eino-examples v0.0.0-20251120123305-3ce08012fd39
 	github.com/gin-gonic/gin v1.11.0
 	github.com/sirupsen/logrus v1.9.3
@@ -32,7 +32,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.51
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/eino-contrib/jsonschema v1.0.2 // indirect
+	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
