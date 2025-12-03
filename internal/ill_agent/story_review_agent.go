@@ -105,7 +105,7 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 
 		if !sessionState.NeedToEditStory {
 			event := &adk.AgentEvent{
-				Action: adk.NewTransferToAgentAction("image_prompt_generate"),
+				Action: adk.NewExitAction(),
 			}
 			gen.Send(event)
 			return
@@ -129,7 +129,6 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 					},
 				},
 			},
-			Action: adk.NewTransferToAgentAction("story_generate"),
 		}
 		gen.Send(event)
 	}()
