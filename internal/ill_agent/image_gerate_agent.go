@@ -4,22 +4,23 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
-	"os"
 
-	"github.com/cloudwego/eino-ext/components/model/ark"
+	// "net/http"
+	// "os"
+
+	// "github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/adk"
 )
 
 func NewImageGenerateAgent(ctx context.Context) adk.Agent {
-	apiKey := os.Getenv("ARK_API_KEY")
-	chatModel, _ := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
-		APIKey:     apiKey,
-		Region:     "cn-beijing",
-		HTTPClient: &http.Client{},
-		Model:      "ep-20250220181854-c8s82",
-	})
-	chatModel = chatModel.WithTools()
+	// apiKey := os.Getenv("ARK_API_KEY")
+	// chatModel, _ := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
+	// 	APIKey:     apiKey,
+	// 	Region:     "cn-beijing",
+	// 	HTTPClient: &http.Client{},
+	// 	Model:      "ep-20250220181854-c8s82",
+	// })
+	// chatModel = chatModel.WithTools()
 
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "StoryAgent",
@@ -27,7 +28,7 @@ func NewImageGenerateAgent(ctx context.Context) adk.Agent {
 		Instruction: `You are an expert writer that can write poems. 
 If feedback is received for the previous version of your poem, you need to modify the poem according to the feedback.
 Your response should ALWAYS contain ONLY the poem, and nothing else.`,
-		Model:     chatModel,
+		Model:     nil,
 		OutputKey: "story_content_to_review",
 	})
 	if err != nil {

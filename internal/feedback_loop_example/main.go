@@ -14,7 +14,7 @@ import (
 	"github.com/cloudwego/eino-examples/adk/common/store"
 )
 
-func main_exec() {
+func Main_exec() {
 	ctx := context.Background()
 	a := NewWriterAgent()
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{

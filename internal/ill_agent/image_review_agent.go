@@ -12,20 +12,20 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-type StoryReviewAgent struct {
+type ImageReviewAgent struct {
 	AgentName string
 	AgentDesc string
 }
 
-func (r StoryReviewAgent) Name(ctx context.Context) string {
+func (r ImageReviewAgent) Name(ctx context.Context) string {
 	return r.AgentName
 }
 
-func (r StoryReviewAgent) Description(ctx context.Context) string {
+func (r ImageReviewAgent) Description(ctx context.Context) string {
 	return r.AgentDesc
 }
 
-func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
+func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 	options ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
 	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
 
@@ -55,11 +55,7 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		sessionState.State = "story_review"
 		SaveSessionState(ctx, sessionState)
 
-		info := "Story content to review: \n"
-		for i, chapter := range sessionState.Story.Chapters {
-			info = info + fmt.Sprintf("第%d章: %s\n%s\n", i+1, chapter.Title, chapter.Content)
-		}
-		info = info + fmt.Sprintf("\nIf you think the content is good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
+		info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
 		event := adk.StatefulInterrupt(ctx, info, sessionState.State)
 		gen.Send(event)
 	}()
@@ -67,19 +63,19 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 	return iter
 }
 
-func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
+func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 	opts ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
 	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
 
 	go func() {
 		defer gen.Close()
-		// if !info.IsResumeTarget { // not explicitly resumed, interrupt with the same review content again
-		// 	sessionState := GetSessionState(ctx)
-		// 	info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
-		// 	event := adk.StatefulInterrupt(ctx, info, sessionState.State)
-		// 	gen.Send(event)
-		// 	return
-		// }
+		if !info.IsResumeTarget { // not explicitly resumed, interrupt with the same review content again
+			sessionState := GetSessionState(ctx)
+			info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
+			event := adk.StatefulInterrupt(ctx, info, sessionState.State)
+			gen.Send(event)
+			return
+		}
 
 		if info.ResumeData == nil {
 			event := &adk.AgentEvent{
@@ -99,7 +95,7 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 		}
 
 		sessionState := GetSessionState(ctx)
-		if strings.ToLower(feedback) != "ok" {
+		if strings.ToLower(feedback) == "no need to edit" {
 			sessionState.NeedToEditStory = false
 		} else {
 			sessionState.NeedToEditStory = true

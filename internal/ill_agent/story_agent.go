@@ -21,11 +21,11 @@ func NewStoryAgent(ctx context.Context) adk.Agent {
 	})
 
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "StoryAgent",
-		Description: "An agent that can write poems",
-		Instruction: `You are an expert writer that can write poems. 
-If feedback is received for the previous version of your poem, you need to modify the poem according to the feedback.
-Your response should ALWAYS contain ONLY the poem, and nothing else.`,
+		Name:        "StoryGenerateAgent",
+		Description: "An agent that can generate children's illustration story",
+		Instruction: `You are an expert writer that can generate children's illustration story. 
+If feedback is received for the previous version of your story, you need to modify the story according to the feedback.
+Your response should be a JSON format string, JSON format: {"chapters": [{"title": "xx", "content": "xxxx"}]}`,
 		Model:     chatModel,
 		OutputKey: "story_content_to_review",
 	})
@@ -34,10 +34,10 @@ Your response should ALWAYS contain ONLY the poem, and nothing else.`,
 	}
 
 	la, err := adk.NewLoopAgent(ctx, &adk.LoopAgentConfig{
-		Name:        "Writer MultiAgent",
-		Description: "An agent that can write poems",
+		Name:        "Story MultiAgent",
+		Description: "An agent that can generate children's illustration story",
 		SubAgents: []adk.Agent{a,
-			&StoryReviewAgent{AgentName: "ReviewerAgent", AgentDesc: "An agent that can review poems"}},
+			&StoryReviewAgent{AgentName: "StoryReviewerAgent", AgentDesc: "An agent that can review story"}},
 	})
 	if err != nil {
 		log.Fatal(fmt.Errorf("failed to create loopagent: %w", err))
