@@ -100,10 +100,10 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 
 		sessionState := GetSessionState(ctx)
 		if strings.ToLower(feedback) != "ok" {
-			sessionState.NeedToEditStory = false
-		} else {
 			sessionState.NeedToEditStory = true
 			sessionState.StoryFeedback = feedback
+		} else {
+			sessionState.NeedToEditStory = false
 		}
 		SaveSessionState(ctx, sessionState)
 

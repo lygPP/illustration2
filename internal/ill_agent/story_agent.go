@@ -4,20 +4,23 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
+
 	"os"
 
 	"github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/adk"
+	arkModel "github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
 
 func NewStoryAgent(ctx context.Context) adk.Agent {
 	apiKey := os.Getenv("ARK_API_KEY")
-	chatModel, _ := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
-		APIKey:     apiKey,
-		Region:     "cn-beijing",
-		HTTPClient: &http.Client{},
-		Model:      "ep-20250220181854-c8s82",
+	chatModel, err := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
+		APIKey:  apiKey,
+		Model:   "ep-20250220181854-c8s82",
+		BaseURL: "https://ark.cn-beijing.volces.com/api/v3",
+		Thinking: &arkModel.Thinking{
+			Type: arkModel.ThinkingTypeDisabled,
+		},
 	})
 
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
