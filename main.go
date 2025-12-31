@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"illustration2/internal/config"
 	"illustration2/internal/ill_agent"
 	"log"
 
@@ -20,7 +21,7 @@ import (
 )
 
 func main() {
-	InitConfig()
+	config.InitConfig()
 
 	ctx := context.Background()
 	debugAgent(ctx)
