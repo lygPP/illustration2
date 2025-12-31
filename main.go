@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"illustration2/internal/ill_agent"
 	"log"
@@ -13,7 +11,6 @@ import (
 	"os"
 	// "os/signal"
 	// "syscall"
-	"time"
 
 	"github.com/cloudwego/eino-examples/adk/common/prints"
 	"github.com/cloudwego/eino-examples/adk/common/store"
@@ -23,6 +20,8 @@ import (
 )
 
 func main() {
+	InitConfig()
+
 	ctx := context.Background()
 	debugAgent(ctx)
 	// feedback_loop_example.Main_exec()
@@ -59,15 +58,6 @@ func main() {
 	// }
 
 	// log.Println("服务器已关闭")
-}
-
-// generateSessionID 生成会话ID
-func generateSessionID() string {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return fmt.Sprintf("session_%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(bytes)
 }
 
 func debugAgent(ctx context.Context) {
