@@ -75,7 +75,11 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 		defer gen.Close()
 		// if !info.IsResumeTarget { // not explicitly resumed, interrupt with the same review content again
 		// 	sessionState := GetSessionState(ctx)
-		// 	info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
+		// 	info := "Story content to review: \n"
+		// 	for i, chapter := range sessionState.Story.Chapters {
+		// 		info = info + fmt.Sprintf("第%d章: %s\n%s\n", i+1, chapter.Title, chapter.Content)
+		// 	}
+		// 	info = info + fmt.Sprintf("\nIf you think the content is good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
 		// 	event := adk.StatefulInterrupt(ctx, info, sessionState.State)
 		// 	gen.Send(event)
 		// 	return

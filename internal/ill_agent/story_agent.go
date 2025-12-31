@@ -28,7 +28,7 @@ func NewStoryAgent(ctx context.Context) adk.Agent {
 		Description: "An agent that can generate children's illustration story",
 		Instruction: `You are an expert writer that can generate children's illustration story. 
 If feedback is received for the previous version of your story, you need to modify the story according to the feedback.
-Your response should be a JSON format string, JSON format: {"chapters": [{"title": "xx", "content": "xxxx"}]}`,
+Your response should must be a JSON format string, JSON format: {"chapters": [{"title": "xx", "content": "xxxx"}]}`,
 		Model:     chatModel,
 		OutputKey: "story_content_to_review",
 	})

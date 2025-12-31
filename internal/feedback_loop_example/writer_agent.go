@@ -4,14 +4,25 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/adk"
 
-	"github.com/cloudwego/eino-examples/adk/common/model"
+	arkModel "github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
 
 func NewWriterAgent() adk.Agent {
 	ctx := context.Background()
+	apiKey := os.Getenv("ARK_API_KEY")
+	chatModel, err := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
+		APIKey:  apiKey,
+		Model:   "ep-20250220181854-c8s82",
+		BaseURL: "https://ark.cn-beijing.volces.com/api/v3",
+		Thinking: &arkModel.Thinking{
+			Type: arkModel.ThinkingTypeDisabled,
+		},
+	})
 
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "WriterAgent",
@@ -19,7 +30,8 @@ func NewWriterAgent() adk.Agent {
 		Instruction: `You are an expert writer that can write poems. 
 If feedback is received for the previous version of your poem, you need to modify the poem according to the feedback.
 Your response should ALWAYS contain ONLY the poem, and nothing else.`,
-		Model:     model.NewChatModel(),
+		// Model:     model.NewChatModel(),
+		Model:     chatModel,
 		OutputKey: "content_to_review",
 	})
 	if err != nil {
