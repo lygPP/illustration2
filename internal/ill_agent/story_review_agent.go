@@ -2,7 +2,6 @@ package ill_agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"illustration2/internal/model"
@@ -41,23 +40,23 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 			return
 		}
 
-		contentToReviewMap := make(map[string][]model.StoryChapter)
-		if err := json.Unmarshal([]byte(contentToReview.(string)), &contentToReviewMap); err != nil {
-			event := &adk.AgentEvent{
-				Err: fmt.Errorf("failed to unmarshal content_to_review: %w", err),
-			}
-			gen.Send(event)
-			return
+		storyChapters := make([]model.StoryChapter, 0)
+		chapters := strings.Split(contentToReview.(string), "\n\n")
+		for _, chapter := range chapters {
+			chapterParts := strings.Split(chapter, "\n")
+			storyChapters = append(storyChapters, model.StoryChapter{
+				Title:   chapterParts[0],
+				Content: chapterParts[1],
+			})
 		}
-		chapters := contentToReviewMap["chapters"]
 		sessionState := GetSessionState(ctx)
-		sessionState.Story.Chapters = chapters
+		sessionState.Story.Chapters = storyChapters
 		sessionState.State = "story_review"
 		SaveSessionState(ctx, sessionState)
 
 		info := "Story content to review: \n"
-		for i, chapter := range sessionState.Story.Chapters {
-			info = info + fmt.Sprintf("第%d章: %s\n%s\n", i+1, chapter.Title, chapter.Content)
+		for _, chapter := range sessionState.Story.Chapters {
+			info = info + fmt.Sprintf("%s\n%s\n", chapter.Title, chapter.Content)
 		}
 		info = info + fmt.Sprintf("\nIf you think the content is good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
 		event := adk.StatefulInterrupt(ctx, info, sessionState.State)
@@ -113,7 +112,7 @@ func (r StoryReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 
 		if !sessionState.NeedToEditStory {
 			event := &adk.AgentEvent{
-				Action: adk.NewExitAction(),
+				Action: adk.NewBreakLoopAction(r.AgentName),
 			}
 			gen.Send(event)
 			return

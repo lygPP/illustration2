@@ -39,6 +39,7 @@ type ImageGenParams struct {
 	Size                      string
 	SequentialImageGeneration string
 	ImageInputs               []string
+	MaxImages                 int
 }
 
 func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]string, error) {
@@ -53,6 +54,9 @@ func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]str
 	if p.Size == "" {
 		p.Size = "1024x1024"
 	}
+	if p.MaxImages == 0 {
+		p.MaxImages = 1
+	}
 	body := map[string]any{
 		"model":  p.Model,
 		"prompt": p.Prompt,
@@ -60,6 +64,9 @@ func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]str
 	}
 	if p.SequentialImageGeneration != "" {
 		body["sequential_image_generation"] = p.SequentialImageGeneration
+		if p.SequentialImageGeneration == "auto" && p.MaxImages > 0 {
+			body["sequential_image_generation_options"] = map[string]any{"max_images": p.MaxImages}
+		}
 	}
 	if len(p.ImageInputs) > 0 {
 		body["image"] = p.ImageInputs
@@ -227,9 +234,9 @@ func getString(m map[string]any, k string) string {
 	return ""
 }
 
-func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string, out any) error {
+func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string) (string, error) {
 	if model == "" {
-		return errors.New("model required")
+		return "", errors.New("model required")
 	}
 	reqBody := map[string]any{
 		"model":    model,
@@ -246,7 +253,7 @@ func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string, o
 		} `json:"choices"`
 	}
 	if err := c.postJSON(ctx, "/api/v3/chat/completions", reqBody, &resp); err != nil {
-		return err
+		return "", err
 	}
 	var content string
 	if len(resp.Choices) > 0 {
@@ -256,7 +263,7 @@ func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string, o
 		}
 	}
 	if content == "" {
-		return errors.New("empty chat content")
+		return "", errors.New("empty chat content")
 	}
-	return json.Unmarshal([]byte(content), out)
+	return content, nil
 }

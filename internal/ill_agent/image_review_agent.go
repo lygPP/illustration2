@@ -2,10 +2,8 @@ package ill_agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"illustration2/internal/model"
 	"strings"
 
 	"github.com/cloudwego/eino/adk"
@@ -15,6 +13,13 @@ import (
 type ImageReviewAgent struct {
 	AgentName string
 	AgentDesc string
+}
+
+func NewImageReviewAgent(ctx context.Context) adk.Agent {
+	return ImageReviewAgent{
+		AgentName: "图片审核agent",
+		AgentDesc: "一个可以审核图片是否符合要求的agent",
+	}
 }
 
 func (r ImageReviewAgent) Name(ctx context.Context) string {
@@ -32,30 +37,26 @@ func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 	go func() {
 		defer gen.Close()
 
-		contentToReview, ok := adk.GetSessionValue(ctx, "story_content_to_review")
-		if !ok {
+		sessionState := GetSessionState(ctx)
+		if sessionState.GeneratedImages == nil {
 			event := &adk.AgentEvent{
-				Err: errors.New("story_content_to_review not found in session"),
+				Err: errors.New("generated_images not found in session"),
 			}
 			gen.Send(event)
 			return
 		}
 
-		contentToReviewMap := make(map[string][]model.StoryChapter)
-		if err := json.Unmarshal([]byte(contentToReview.(string)), &contentToReviewMap); err != nil {
-			event := &adk.AgentEvent{
-				Err: fmt.Errorf("failed to unmarshal content_to_review: %w", err),
-			}
-			gen.Send(event)
-			return
-		}
-		chapters := contentToReviewMap["chapters"]
-		sessionState := GetSessionState(ctx)
-		sessionState.Story.Chapters = chapters
-		sessionState.State = "story_review"
+		sessionState.State = "image_review"
 		SaveSessionState(ctx, sessionState)
 
-		info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
+		info := "Image content to review: \n"
+		for i, urls := range sessionState.GeneratedImages {
+			info = info + fmt.Sprintf("第%d章节组图：\n", i)
+			for _, url := range urls {
+				info = info + fmt.Sprintf("%s\n", url)
+			}
+		}
+		info = info + fmt.Sprintf("\nIf you think the images are good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
 		event := adk.StatefulInterrupt(ctx, info, sessionState.State)
 		gen.Send(event)
 	}()
@@ -69,17 +70,10 @@ func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 
 	go func() {
 		defer gen.Close()
-		if !info.IsResumeTarget { // not explicitly resumed, interrupt with the same review content again
-			sessionState := GetSessionState(ctx)
-			info := fmt.Sprintf("Story content to review: \n`\n%s\n`. \n\nIf you think the content is good as it is, please reply with \"No need to edit\". \nOtherwise, please provide your feedback.", sessionState.Story.Chapters)
-			event := adk.StatefulInterrupt(ctx, info, sessionState.State)
-			gen.Send(event)
-			return
-		}
 
 		if info.ResumeData == nil {
 			event := &adk.AgentEvent{
-				Err: errors.New("review agent receives nil resume data"),
+				Err: errors.New("image_review agent receives nil resume data"),
 			}
 			gen.Send(event)
 			return
@@ -88,32 +82,32 @@ func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 		feedback, ok := info.ResumeData.(string)
 		if !ok {
 			event := &adk.AgentEvent{
-				Err: errors.New("review agent receives invalid resume data"),
+				Err: errors.New("image_review agent receives invalid resume data"),
 			}
 			gen.Send(event)
 			return
 		}
 
 		sessionState := GetSessionState(ctx)
-		if strings.ToLower(feedback) == "no need to edit" {
-			sessionState.NeedToEditStory = false
+		if strings.ToLower(feedback) != "ok" {
+			sessionState.NeedToEditImages = true
+			sessionState.ImageFeedback = feedback
 		} else {
-			sessionState.NeedToEditStory = true
-			sessionState.StoryFeedback = feedback
+			sessionState.NeedToEditImages = false
 		}
 		SaveSessionState(ctx, sessionState)
 
-		if !sessionState.NeedToEditStory {
+		if !sessionState.NeedToEditImages {
 			event := &adk.AgentEvent{
-				Action: adk.NewExitAction(),
+				Action: adk.NewBreakLoopAction(r.AgentName),
 			}
 			gen.Send(event)
 			return
 		}
 
-		if sessionState.StoryFeedback == "" {
+		if sessionState.ImageFeedback == "" {
 			event := &adk.AgentEvent{
-				Err: errors.New("story feedback is nil"),
+				Err: errors.New("image feedback is nil"),
 			}
 			gen.Send(event)
 			return
@@ -125,7 +119,7 @@ func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 					IsStreaming: false,
 					Message: &schema.Message{
 						Role:    schema.Assistant,
-						Content: sessionState.StoryFeedback,
+						Content: sessionState.ImageFeedback,
 					},
 				},
 			},

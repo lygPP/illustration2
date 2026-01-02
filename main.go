@@ -62,7 +62,7 @@ func main() {
 }
 
 func debugAgent(ctx context.Context) {
-	a := ill_agent.NewStoryAgent(ctx)
+	a := ill_agent.NewMKAgent(ctx)
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		EnableStreaming: true, // you can disable streaming here
 		Agent:           a,
