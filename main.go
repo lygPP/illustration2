@@ -24,7 +24,8 @@ func main() {
 	config.InitConfig()
 
 	ctx := context.Background()
-	debugAgent(ctx)
+	ill_agent.TestImageAgent(ctx)
+	// debugAgent(ctx)
 	// feedback_loop_example.Main_exec()
 	// // 初始化日志
 	// logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})

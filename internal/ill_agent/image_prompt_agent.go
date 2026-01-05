@@ -63,7 +63,7 @@ func (r ImagePromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 				Prompt:       content,
 			})
 		}
-		fmt.Printf("imagePrompts: %+v\n", imagePrompts)
+		// fmt.Printf("imagePrompts: %+v\n", imagePrompts)
 		sessionState.ImagePrompts = imagePrompts
 		sessionState.State = "image_prompt"
 		SaveSessionState(ctx, sessionState)

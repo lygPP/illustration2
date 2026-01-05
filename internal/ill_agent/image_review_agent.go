@@ -100,6 +100,7 @@ func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 		if !sessionState.NeedToEditImages {
 			event := &adk.AgentEvent{
 				Action: adk.NewBreakLoopAction(r.AgentName),
+				// Action: adk.NewExitAction(),
 			}
 			gen.Send(event)
 			return

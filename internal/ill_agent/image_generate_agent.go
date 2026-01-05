@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"illustration2/internal/volc"
+	"log"
+	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
@@ -22,7 +24,7 @@ func NewImageGenerateAgent(ctx context.Context) adk.Agent {
 		AgentName: "ImageGenerateAgent",
 		AgentDesc: ``,
 		ModelName: "ep-20251124201143-rwjnq",
-		ArkClient: volc.NewArkClientDefault(),
+		ArkClient: volc.NewArkClientWithTimeout(180 * time.Second),
 	}
 	return a
 }
@@ -48,7 +50,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		for _, prompt := range sessionState.ImagePrompts {
 			generateImagesReq := volc.ImageGenParams{
 				Model:                     r.ModelName,
-				Prompt:                    fmt.Sprintf("%s\n%s", prompt.Prompt, "Additional generation requirement: Each set of images should include three consecutive images related to the scene."),
+				Prompt:                    fmt.Sprintf("%s\n%s", prompt.Prompt, "Additional generation requirement: Generate exactly 3 images that depict the scene in chronological order according to the story. The images must be related, coherent, and show a clear progression of events. Maintain consistent style, characters, and setting across all 3 images to create a cohesive visual narrative."),
 				Size:                      "2304x1728",
 				SequentialImageGeneration: "auto",
 				MaxImages:                 3,
@@ -61,6 +63,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 			}
 			urls, err := r.ArkClient.GenerateImages(ctx, generateImagesReq)
 			if err != nil {
+				log.Fatal(fmt.Errorf("image generation failed: %+v", err))
 				event := &adk.AgentEvent{
 					Err: errors.New("image generation failed"),
 				}

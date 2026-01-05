@@ -33,6 +33,16 @@ func NewArkClientDefault() *ArkClient {
 	}
 }
 
+func NewArkClientWithTimeout(timeout time.Duration) *ArkClient {
+	apiKey := os.Getenv("ARK_API_KEY")
+	return &ArkClient{
+		BaseURL:    defaultBase,
+		APIKey:     apiKey,
+		HTTPClient: &http.Client{Timeout: timeout},
+		Mock:       strings.ToLower(os.Getenv("ARK_MOCK")) == "1" || strings.ToLower(os.Getenv("ARK_MOCK")) == "true",
+	}
+}
+
 type ImageGenParams struct {
 	Model                     string
 	Prompt                    string
