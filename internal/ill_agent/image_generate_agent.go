@@ -50,7 +50,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		for _, prompt := range sessionState.ImagePrompts {
 			generateImagesReq := volc.ImageGenParams{
 				Model:                     r.ModelName,
-				Prompt:                    fmt.Sprintf("%s\n%s", prompt.Prompt, "Additional generation requirement: Generate exactly 3 images that depict the scene in chronological order according to the story. The images must be related, coherent, and show a clear progression of events. Maintain consistent style, characters, and setting across all 3 images to create a cohesive visual narrative."),
+				Prompt:                    prompt.Prompt,
 				Size:                      "2304x1728",
 				SequentialImageGeneration: "auto",
 				MaxImages:                 3,

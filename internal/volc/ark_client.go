@@ -134,24 +134,28 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 	if p.FirstFrameURL != "" && p.LastFrameURL != "" {
 		content = append(content, map[string]any{
 			"type":      "image_url",
-			"image_url": map[string]any{"url": p.FirstFrameURL, "role": "first_frame"},
+			"image_url": map[string]any{"url": p.FirstFrameURL},
+			"role":      "first_frame",
 		})
 		content = append(content, map[string]any{
 			"type":      "image_url",
-			"image_url": map[string]any{"url": p.LastFrameURL, "role": "last_frame"},
+			"image_url": map[string]any{"url": p.LastFrameURL},
+			"role":      "last_frame",
 		})
 		// 处理首帧模式
 	} else if p.FirstFrameURL != "" {
 		content = append(content, map[string]any{
 			"type":      "image_url",
-			"image_url": map[string]any{"url": p.FirstFrameURL, "role": "first_frame"},
+			"image_url": map[string]any{"url": p.FirstFrameURL},
+			"role":      "first_frame",
 		})
 		// 处理参考图片模式
 	} else if len(p.ReferenceImageURLs) > 0 {
 		for _, u := range p.ReferenceImageURLs {
 			content = append(content, map[string]any{
 				"type":      "image_url",
-				"image_url": map[string]any{"url": u, "role": "reference_image"},
+				"image_url": map[string]any{"url": u},
+				"role":      "reference_image",
 			})
 		}
 	}

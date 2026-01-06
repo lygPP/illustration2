@@ -24,7 +24,7 @@ func NewVideoGenerateAgent(ctx context.Context) adk.Agent {
 	a := VideoGenerateAgent{
 		AgentName: "VideoGenerateAgent",
 		AgentDesc: "一个可以根据生成的图片创建视频的agent",
-		ModelName: "ep-20251124201143-rwjnq",
+		ModelName: "ep-20260107003549-kcrmk",
 		ArkClient: volc.NewArkClientWithTimeout(300 * time.Second), // 视频生成可能需要更长时间
 	}
 	return a
