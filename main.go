@@ -5,61 +5,72 @@ import (
 	"context"
 	"fmt"
 	"illustration2/internal/config"
+	"illustration2/internal/handler"
 	"illustration2/internal/ill_agent"
+	"illustration2/internal/service"
+	"illustration2/internal/volc"
 	"log"
+	"net/http"
+	"os/signal"
+	"syscall"
 
-	// "net/http"
 	"os"
-	// "os/signal"
-	// "syscall"
 
 	"github.com/cloudwego/eino-examples/adk/common/prints"
 	"github.com/cloudwego/eino-examples/adk/common/store"
 	"github.com/cloudwego/eino/adk"
-	// "github.com/gin-gonic/gin"
-	// "github.com/sirupsen/logrus"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	config.InitConfig()
 
-	ctx := context.Background()
-	ill_agent.TestImageAgent(ctx)
+	// ctx := context.Background()
+	// ill_agent.TestImageAgent(ctx)
 	// debugAgent(ctx)
 	// feedback_loop_example.Main_exec()
-	// // 初始化日志
-	// logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
-	// logrus.SetLevel(logrus.InfoLevel)
+	// 初始化日志
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	logrus.SetLevel(logrus.InfoLevel)
 
-	// // 初始化Gin路由
-	// router := gin.Default()
+	// 初始化Gin路由
+	router := gin.Default()
 
-	// // 启动服务器
-	// srv := &http.Server{
-	// 	Addr:    ":8080",
-	// 	Handler: router,
-	// }
+	// 初始化服务
+	arkClient := volc.NewArkClientDefault()
+	genService := service.NewGenerationService(arkClient)
+	genHandler := handler.NewGenerationHandler(genService)
 
-	// // 在goroutine中启动服务器
-	// go func() {
-	// 	log.Printf("服务器启动在 :8080")
-	// 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-	// 		log.Fatalf("启动服务器失败: %v", err)
-	// 	}
-	// }()
+	router.POST("/api/generate", genHandler.HandleGeneration)
+	router.GET("/api/video/:task_id", genHandler.HandleGetVideo)
 
-	// // 等待中断信号
-	// quit := make(chan os.Signal, 1)
-	// signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	// <-quit
-	// log.Println("关闭服务器...")
+	// 启动服务器
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
 
-	// // 优雅关闭服务器
-	// if err := srv.Close(); err != nil {
-	// 	log.Fatalf("服务器关闭失败: %v", err)
-	// }
+	// 在goroutine中启动服务器
+	go func() {
+		log.Printf("服务器启动在 :8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("启动服务器失败: %v", err)
+		}
+	}()
 
-	// log.Println("服务器已关闭")
+	// 等待中断信号
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("关闭服务器...")
+
+	// 优雅关闭服务器
+	if err := srv.Close(); err != nil {
+		log.Fatalf("服务器关闭失败: %v", err)
+	}
+
+	log.Println("服务器已关闭")
 }
 
 func debugAgent(ctx context.Context) {
