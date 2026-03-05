@@ -121,6 +121,7 @@ type VideoTaskParams struct {
 	FirstFrameBase64      string
 	LastFrameURL          string
 	LastFrameBase64       string
+	GenerateAudio      *bool
 }
 
 func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (string, error) {
@@ -129,6 +130,10 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 	}
 	if p.Model == "" {
 		p.Model = "doubao-seedance-1-0-lite-i2v"
+	}
+	genAudio := true
+	if p.GenerateAudio != nil {
+		genAudio = *p.GenerateAudio
 	}
 	content := make([]map[string]any, 0, 3) // 1 text + up to 2 images
 	content = append(content, map[string]any{"type": "text", "text": p.Prompt})
@@ -186,6 +191,7 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 		"model":   p.Model,
 		"content": content,
 	}
+	body["generate_audio"] = genAudio
 	var resp map[string]any
 	if err := c.postJSON(ctx, "/api/v3/contents/generations/tasks", body, &resp); err != nil {
 		return "", err

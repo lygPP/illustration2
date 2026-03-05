@@ -60,7 +60,7 @@ func (s *GenerationService) generateImage(ctx context.Context, req GenerationReq
 	params := volc.ImageGenParams{
 		Model:                     model,
 		Prompt:                    req.Prompt,
-		Size:                      req.Size,
+		Size:                      "2K",
 		SequentialImageGeneration: "auto", // Default to auto if not specified
 		ImageInputs:               req.ImageList,
 	}
@@ -91,9 +91,9 @@ func (s *GenerationService) GetVideoResult(ctx context.Context, taskID string) (
 func (s *GenerationService) generateVideo(ctx context.Context, req GenerationRequest) (*GenerationResponse, error) {
 	model := req.ModelName
 	if model == "seedance1.0" {
-		model = "ep-20251124201423-clr5b"
+		model = "ep-20260107003549-kcrmk"
 	} else if model == "seedance2.0" {
-		model = "ep-20251124201423-clr5b" // Assuming this mapping, adjust if needed
+		model = "ep-20260305130909-qnwqm" // Assuming this mapping, adjust if needed
 	}
 
 	params := volc.VideoTaskParams{
