@@ -90,8 +90,10 @@ func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]str
 		} `json:"data"`
 	}
 	if err := c.postJSON(ctx, "/api/v3/images/generations", body, &resp); err != nil {
+		fmt.Printf("err: %+v\n", err)
 		return nil, err
 	}
+	fmt.Printf("resp: %+v\n", resp)
 	urls := make([]string, 0, len(resp.Data))
 	for _, d := range resp.Data {
 		if d.URL != "" {
@@ -121,7 +123,7 @@ type VideoTaskParams struct {
 	FirstFrameBase64      string
 	LastFrameURL          string
 	LastFrameBase64       string
-	GenerateAudio      *bool
+	GenerateAudio         *bool
 }
 
 func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (string, error) {
@@ -194,8 +196,10 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 	body["generate_audio"] = genAudio
 	var resp map[string]any
 	if err := c.postJSON(ctx, "/api/v3/contents/generations/tasks", body, &resp); err != nil {
+		fmt.Printf("err: %+v\n", err)
 		return "", err
 	}
+	fmt.Printf("resp: %+v\n", resp)
 	if id, ok := resp["task_id"].(string); ok && id != "" {
 		return id, nil
 	}
@@ -209,7 +213,7 @@ func (c *ArkClient) GetVideoTask(ctx context.Context, taskID string) (string, st
 	if c.Mock {
 		return "succeeded", "https://example.com/mock_video.mp4", nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v3/contents/generations/tasks?task_id="+taskID, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v3/contents/generations/tasks/"+taskID, nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -225,14 +229,14 @@ func (c *ArkClient) GetVideoTask(ctx context.Context, taskID string) (string, st
 	}
 	var resp map[string]any
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		fmt.Printf("err: %+v\n", err)
 		return "", "", err
 	}
+	fmt.Printf("resp: %+v\n", resp)
 	status := getString(resp, "status")
-	url := getString(resp, "video_url")
-	if url == "" {
-		if out, ok := resp["output"].(map[string]any); ok {
-			url = getString(out, "video_url")
-		}
+	var url string
+	if content, ok := resp["content"].(map[string]any); ok {
+		url = getString(content, "video_url")
 	}
 	return status, url, nil
 }
