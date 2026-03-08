@@ -55,7 +55,7 @@ func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		})
 		for i, urls := range sessionState.GeneratedImages {
 			infoList = append(infoList, map[string]interface{}{
-				"text":      fmt.Sprintf("第%d章节组图：", i),
+				"text":      fmt.Sprintf("第%d章节组图：", i+1),
 				"imageUrls": urls,
 			})
 		}
