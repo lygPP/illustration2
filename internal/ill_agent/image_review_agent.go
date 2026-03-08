@@ -49,15 +49,20 @@ func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		sessionState.State = "image_review"
 		SaveSessionState(ctx, sessionState)
 
-		info := "Image content to review: \n"
+		infoList := make([]map[string]interface{}, 0)
+		infoList = append(infoList, map[string]interface{}{
+			"text": "已生成图片如下：",
+		})
 		for i, urls := range sessionState.GeneratedImages {
-			info = info + fmt.Sprintf("第%d章节组图：\n", i)
-			for _, url := range urls {
-				info = info + fmt.Sprintf("%s\n", url)
-			}
+			infoList = append(infoList, map[string]interface{}{
+				"text":      fmt.Sprintf("第%d章节组图：", i),
+				"imageUrls": urls,
+			})
 		}
-		info = info + fmt.Sprintf("\nIf you think the images are good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
-		event := adk.StatefulInterrupt(ctx, info, sessionState.State)
+		infoList = append(infoList, map[string]interface{}{
+			"text": "如果图片符合要求，请回复ok。否则提供反馈。",
+		})
+		event := adk.StatefulInterrupt(ctx, infoList, sessionState.State)
 		gen.Send(event)
 	}()
 

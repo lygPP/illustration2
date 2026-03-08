@@ -2,6 +2,7 @@ package ill_agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"illustration2/internal/volc"
@@ -149,13 +150,19 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 
 		log.Printf("Generated video URL: %s\n", videoURL)
 
+		infoList := make([]map[string]interface{}, 0)
+		infoList = append(infoList, map[string]interface{}{
+			"text":      "已生成视频：",
+			"videoUrls": []string{videoURL},
+		})
+		data, _ := json.Marshal(infoList)
 		event := &adk.AgentEvent{
 			Output: &adk.AgentOutput{
 				MessageOutput: &adk.MessageVariant{
 					IsStreaming: false,
 					Message: &schema.Message{
 						Role:    schema.Assistant,
-						Content: fmt.Sprintf("视频生成完成！视频URL: %s", videoURL),
+						Content: string(data),
 					},
 				},
 			},

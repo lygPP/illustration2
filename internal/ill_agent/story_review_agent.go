@@ -62,12 +62,19 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		sessionState.State = "story_review"
 		SaveSessionState(ctx, sessionState)
 
-		info := "Story content to review: \n"
+		infoList := make([]map[string]interface{}, 0)
+		infoList = append(infoList, map[string]interface{}{
+			"text": "已生成故事如下：",
+		})
 		for _, chapter := range sessionState.Story.Chapters {
-			info = info + fmt.Sprintf("%s\n%s\n", chapter.Title, chapter.Content)
+			infoList = append(infoList, map[string]interface{}{
+				"text": fmt.Sprintf("%s\n%s\n", chapter.Title, chapter.Content),
+			})
 		}
-		info = info + fmt.Sprintf("\nIf you think the content is good as it is, please reply with \"ok\". \nOtherwise, please provide your feedback.")
-		event := adk.StatefulInterrupt(ctx, info, sessionState.State)
+		infoList = append(infoList, map[string]interface{}{
+			"text": "如果内容符合要求，请回复ok。否则提供反馈。",
+		})
+		event := adk.StatefulInterrupt(ctx, infoList, sessionState.State)
 		gen.Send(event)
 	}()
 

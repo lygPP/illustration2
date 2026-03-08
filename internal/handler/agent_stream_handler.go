@@ -177,7 +177,7 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 			}
 			if event.Action != nil && event.Action.Interrupted != nil && len(event.Action.Interrupted.InterruptContexts) > 0 {
 				interruptID := event.Action.Interrupted.InterruptContexts[0].ID
-				reInfo := event.Action.Interrupted.InterruptContexts[0].Info.(string)
+				reInfo := event.Action.Interrupted.InterruptContexts[0].Info.([]map[string]interface{})
 				if event.Output == nil {
 					event.Output = &adk.AgentOutput{}
 				}
@@ -201,6 +201,17 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: sessionID,
 			// })
+			if finalData.Action != "interrupted" && finalData.AgentName == "VideoGenerateAgent" {
+				if finalData.Output != nil {
+					reInfo := make([]map[string]interface{}, 0)
+					json.Unmarshal([]byte(finalData.Message), &reInfo)
+					tmpAgentOutput := finalData.Output.(*adk.AgentOutput)
+					tmpAgentOutput.CustomizedOutput = map[string]any{
+						"interrupt_info": reInfo,
+					}
+					finalData.Output = tmpAgentOutput
+				}
+			}
 			sendSSEEvent(c.Writer, flusher, AgentStreamEvent{
 				Type:      "complete",
 				Data:      finalData,
@@ -357,7 +368,7 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
 			}
 			if event.Action != nil && event.Action.Interrupted != nil && len(event.Action.Interrupted.InterruptContexts) > 0 {
 				interruptID := event.Action.Interrupted.InterruptContexts[0].ID
-				reInfo := event.Action.Interrupted.InterruptContexts[0].Info.(string)
+				reInfo := event.Action.Interrupted.InterruptContexts[0].Info.([]map[string]interface{})
 				if event.Output == nil {
 					event.Output = &adk.AgentOutput{}
 				}
@@ -381,6 +392,17 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: req.SessionID,
 			// })
+			if finalData.Action != "interrupted" && finalData.AgentName == "VideoGenerateAgent" {
+				if finalData.Output != nil {
+					reInfo := make([]map[string]interface{}, 0)
+					json.Unmarshal([]byte(finalData.Message), &reInfo)
+					tmpAgentOutput := finalData.Output.(*adk.AgentOutput)
+					tmpAgentOutput.CustomizedOutput = map[string]any{
+						"interrupt_info": reInfo,
+					}
+					finalData.Output = tmpAgentOutput
+				}
+			}
 			sendSSEEvent(c.Writer, flusher, AgentStreamEvent{
 				Type:      "complete",
 				Data:      finalData,
