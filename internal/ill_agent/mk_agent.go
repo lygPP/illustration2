@@ -66,7 +66,7 @@ func NewMKAgent(ctx context.Context) adk.Agent {
 		Description: "一个可以生成儿童插画的Agent",
 		SubAgents: []adk.Agent{
 			NewStoryAgent(ctx),
-			NewImagePromptAgent(ctx),
+			NewImageAgent(ctx),
 		},
 	})
 	if err != nil {
