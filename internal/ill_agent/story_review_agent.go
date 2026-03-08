@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"illustration2/internal/model"
+	"log"
 	"strings"
 
 	"github.com/cloudwego/eino/adk"
@@ -32,6 +33,7 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		defer gen.Close()
 
 		contentToReview, ok := adk.GetSessionValue(ctx, "story_content_to_review")
+		// log.Printf("story_content_to_review: %v\n", contentToReview)
 		if !ok {
 			event := &adk.AgentEvent{
 				Err: errors.New("story_content_to_review not found in session"),
@@ -41,12 +43,18 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		}
 
 		storyChapters := make([]model.StoryChapter, 0)
-		chapters := strings.Split(contentToReview.(string), "\n\n")
+		chapters := strings.Split(contentToReview.(string), "##")
 		for _, chapter := range chapters {
-			chapterParts := strings.Split(chapter, "\n")
+			chapterParts := strings.Split(chapter, "#")
+			title := strings.ReplaceAll(chapterParts[0], "\n", "")
+			content := ""
+			if len(chapterParts) > 1 {
+				content = strings.ReplaceAll(strings.Join(chapterParts[1:], ""), "\n", "")
+			}
+			log.Printf("title: %v\n content: %v\n", title, content)
 			storyChapters = append(storyChapters, model.StoryChapter{
-				Title:   chapterParts[0],
-				Content: chapterParts[1],
+				Title:   title,
+				Content: content,
 			})
 		}
 		sessionState := GetSessionState(ctx)

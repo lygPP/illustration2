@@ -98,6 +98,7 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 			gen.Send(event)
 			return
 		}
+		log.Printf("Video task created with ID: %s\n", taskID)
 
 		// 轮询视频任务状态
 		var status string
@@ -146,7 +147,7 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		sessionState.State = "video_generate"
 		SaveSessionState(ctx, sessionState)
 
-		fmt.Printf("Generated video URL: %s\n", videoURL)
+		log.Printf("Generated video URL: %s\n", videoURL)
 
 		event := &adk.AgentEvent{
 			Output: &adk.AgentOutput{

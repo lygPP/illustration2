@@ -72,7 +72,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 			}
 			generatedImages[prompt.ChapterIndex] = urls
 		}
-		fmt.Printf("generatedImages: %+v\n", generatedImages)
+		log.Printf("generatedImages: %+v\n", generatedImages)
 		sessionState.GeneratedImages = generatedImages
 		sessionState.State = "image_generate"
 		SaveSessionState(ctx, sessionState)

@@ -41,9 +41,12 @@ func main() {
 	arkClient := volc.NewArkClientDefault()
 	genService := service.NewGenerationService(arkClient)
 	genHandler := handler.NewGenerationHandler(genService)
+	agentStreamHandler := handler.NewAgentStreamHandler(genService)
 
 	router.POST("/api/generate", genHandler.HandleGeneration)
 	router.GET("/api/video/:task_id", genHandler.HandleGetVideo)
+	router.POST("/api/agent/stream", agentStreamHandler.HandleAgentStream)
+	router.POST("/api/agent/resume", agentStreamHandler.HandleAgentResume)
 
 	// 启动服务器
 	srv := &http.Server{

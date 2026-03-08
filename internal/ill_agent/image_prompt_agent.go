@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"illustration2/internal/model"
 	"illustration2/internal/volc"
+	"log"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
@@ -63,7 +64,7 @@ func (r ImagePromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 				Prompt:       content,
 			})
 		}
-		// fmt.Printf("imagePrompts: %+v\n", imagePrompts)
+		log.Printf("imagePrompts: %+v\n", imagePrompts)
 		sessionState.ImagePrompts = imagePrompts
 		sessionState.State = "image_prompt"
 		SaveSessionState(ctx, sessionState)
