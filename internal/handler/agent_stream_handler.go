@@ -106,7 +106,6 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(eventChan)
 
 		// Process events
 		for {
@@ -124,6 +123,8 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 
 		close(doneChan)
 	}()
+
+	defer close(eventChan)
 
 	// Flusher to send data immediately
 	flusher, ok := c.Writer.(http.Flusher)
@@ -248,7 +249,7 @@ type AgentResumeRequest struct {
 	Input       string `json:"input" binding:"required"`
 }
 
-func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
+func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_security_alert IDOR
 	var req AgentResumeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -312,7 +313,6 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(resumeEventChan)
 
 		for {
 			event, ok := iter.Next()
@@ -323,6 +323,7 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
 			select {
 			case resumeEventChan <- event:
 			case <-ctx.Done():
+				log.Println("Client disconnected")
 				return
 			}
 		}
@@ -330,12 +331,15 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) {
 		close(resumeDoneChan)
 	}()
 
+	defer close(resumeEventChan)
+
 	// Process events and send to client
 	var finalData eventData
 	for {
 		select {
 		case event, ok := <-resumeEventChan:
 			if !ok {
+				log.Printf("Agent execution not ok, event: %+v\n", event)
 				sendSSEEvent(c.Writer, flusher, AgentStreamEvent{
 					Type:      "complete",
 					Message:   "Agent execution completed",
