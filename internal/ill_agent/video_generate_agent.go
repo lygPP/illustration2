@@ -87,6 +87,7 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 			Model:              r.ModelName,
 			Prompt:             videoPrompt,
 			ReferenceImageURLs: referenceImages,
+			Duration:           12, // 视频时长12秒
 		}
 
 		// 创建视频任务

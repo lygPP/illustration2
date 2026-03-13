@@ -124,6 +124,7 @@ type VideoTaskParams struct {
 	LastFrameURL          string
 	LastFrameBase64       string
 	GenerateAudio         *bool
+	Duration              int
 }
 
 func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (string, error) {
@@ -194,6 +195,9 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 		"content": content,
 	}
 	body["generate_audio"] = genAudio
+	if p.Duration > 0 {
+		body["duration"] = p.Duration
+	}
 	var resp map[string]any
 	if err := c.postJSON(ctx, "/api/v3/contents/generations/tasks", body, &resp); err != nil {
 		fmt.Printf("err: %+v\n", err)
