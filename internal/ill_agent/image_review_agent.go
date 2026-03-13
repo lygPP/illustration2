@@ -17,7 +17,7 @@ type ImageReviewAgent struct {
 
 func NewImageReviewAgent(ctx context.Context) adk.Agent {
 	return ImageReviewAgent{
-		AgentName: "图片审核agent",
+		AgentName: "图片内容审核助手",
 		AgentDesc: "一个可以审核图片是否符合要求的agent",
 	}
 }

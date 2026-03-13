@@ -16,6 +16,7 @@ type IllustrationSessionState struct {
 	Story            *model.Story        `json:"story,omitempty"`               // 生成的故事
 	ImagePrompts     []model.ImagePrompt `json:"image_prompts,omitempty"`       // 图片生成提示词
 	GeneratedImages  map[int][]string    `json:"generated_images,omitempty"`    // 生成的图片，key为章节索引
+	VideoPrompt      string              `json:"video_prompt,omitempty"`        // 视频生成提示词
 	VideoURL         string              `json:"video_url,omitempty"`           // 最终生成的视频URL
 	NeedToEditStory  bool                `json:"need_to_edit_story,omitempty"`  // 是否需要编辑故事
 	StoryFeedback    string              `json:"story_feedback,omitempty"`      // 故事反馈

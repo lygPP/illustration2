@@ -23,7 +23,7 @@ type VideoGenerateAgent struct {
 
 func NewVideoGenerateAgent(ctx context.Context) adk.Agent {
 	a := VideoGenerateAgent{
-		AgentName: "VideoGenerateAgent",
+		AgentName: "视频生成助手",
 		AgentDesc: "一个可以根据生成的图片创建视频的agent",
 		ModelName: "ep-20260107003549-kcrmk",
 		ArkClient: volc.NewArkClientWithTimeout(300 * time.Second), // 视频生成可能需要更长时间
@@ -61,8 +61,8 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		var videoPrompt string
 		var referenceImages []string
 
-		// 从故事和图片提示词中生成视频描述
-		if sessionState.Story != nil {
+		videoPrompt = sessionState.VideoPrompt
+		if videoPrompt == "" && sessionState.Story != nil {
 			videoPrompt = fmt.Sprintf("根据以下故事生成一个连贯的视频：%s\n", sessionState.Story.Theme)
 			for i, chapter := range sessionState.Story.Chapters {
 				videoPrompt += fmt.Sprintf("第%d章：%s\n%s\n", i+1, chapter.Title, chapter.Content)

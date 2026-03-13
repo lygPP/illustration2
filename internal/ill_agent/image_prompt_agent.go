@@ -21,8 +21,8 @@ type ImagePromptAgent struct {
 
 func NewImagePromptAgent(ctx context.Context) adk.Agent {
 	a := ImagePromptAgent{
-		AgentName: "ImagePromptAgent",
-		AgentDesc: `You are a professional image prompt word generation assistant that generates corresponding text and image prompt words based on user input content.Only output the final English prompt words, without the need for additional information.
+		AgentName: "图片提示词助手",
+		AgentDesc: `You are a professional graphic prompt word engineer who needs to analyze and summarize the user's input content to generate professional, concise, and clear meaning graphic prompt words. Only output the final English prompt words without additional information.
 User input content: 
 %s`,
 		ModelName: "ep-20250220181854-c8s82",

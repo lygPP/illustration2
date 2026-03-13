@@ -202,7 +202,7 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: sessionID,
 			// })
-			if finalData.Action != "interrupted" && finalData.AgentName == "VideoGenerateAgent" {
+			if finalData.Action != "interrupted" && finalData.AgentName == "视频生成助手" {
 				if finalData.Output != nil {
 					reInfo := make([]map[string]interface{}, 0)
 					json.Unmarshal([]byte(finalData.Message), &reInfo)
@@ -396,7 +396,7 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_secur
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: req.SessionID,
 			// })
-			if finalData.Action != "interrupted" && finalData.AgentName == "VideoGenerateAgent" {
+			if finalData.Action != "interrupted" && finalData.AgentName == "视频生成助手" {
 				if finalData.Output != nil {
 					reInfo := make([]map[string]interface{}, 0)
 					json.Unmarshal([]byte(finalData.Message), &reInfo)

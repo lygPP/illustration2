@@ -24,7 +24,7 @@ func NewStoryAgent(ctx context.Context) adk.Agent {
 	})
 
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "StoryGenerateAgent",
+		Name:        "故事生成助手",
 		Description: "An agent that can generate children's illustration story",
 		Instruction: `You are an expert writer that can generate children's illustration story. 
 If feedback is received for the previous version of your story, you need to modify the story according to the feedback.
@@ -42,7 +42,7 @@ Your response should contain multiple chapters, and must output strictly in the 
 		Name:        "Story MultiAgent",
 		Description: "An agent that can generate children's illustration story",
 		SubAgents: []adk.Agent{a,
-			&StoryReviewAgent{AgentName: "StoryReviewerAgent", AgentDesc: "An agent that can review story"}},
+			&StoryReviewAgent{AgentName: "故事内容审核助手", AgentDesc: "An agent that can review story"}},
 	})
 	if err != nil {
 		log.Fatal(fmt.Errorf("failed to create loopagent: %w", err))

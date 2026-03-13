@@ -21,7 +21,7 @@ type ImageGenerateAgent struct {
 
 func NewImageGenerateAgent(ctx context.Context) adk.Agent {
 	a := ImageGenerateAgent{
-		AgentName: "ImageGenerateAgent",
+		AgentName: "图片生成助手",
 		AgentDesc: ``,
 		ModelName: "ep-20251124201143-rwjnq",
 		ArkClient: volc.NewArkClientWithTimeout(180 * time.Second),
@@ -53,7 +53,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 				Prompt:                    prompt.Prompt,
 				Size:                      "2304x1728",
 				SequentialImageGeneration: "auto",
-				MaxImages:                 3,
+				MaxImages:                 1,
 			}
 			if sessionState.ImageFeedback != "" {
 				generateImagesReq.Prompt = fmt.Sprintf("%s\n%s", generateImagesReq.Prompt, sessionState.ImageFeedback)
