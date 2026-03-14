@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"illustration2/internal/utils"
 	"illustration2/internal/volc"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -49,7 +52,7 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
-		if sessionState.GeneratedImages == nil || len(sessionState.GeneratedImages) == 0 {
+		if len(sessionState.GeneratedImages) == 0 {
 			gen.Send(&adk.AgentEvent{Err: errors.New("no generated images found, cannot generate chapter videos")})
 			return
 		}
@@ -183,6 +186,40 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		data, _ := json.Marshal(infoList)
 
 		log.Printf("chapterVideoURLs: %+v\n", chapterVideoURLs)
+
+		// 拼接视频并保存到resource目录
+		if len(chapterVideoURLs) >= 2 {
+			keys := make([]int, 0, len(chapterVideoURLs))
+			for k := range chapterVideoURLs {
+				keys = append(keys, k)
+			}
+			sort.Ints(keys)
+
+			videoURLList := make([]string, 0, len(chapterVideoURLs))
+			for _, k := range keys {
+				videoURLList = append(videoURLList, chapterVideoURLs[k])
+			}
+
+			resourceDir := "resource"
+			if err := os.MkdirAll(resourceDir, 0755); err != nil {
+				log.Printf("failed to create resource directory: %v\n", err)
+			} else {
+				theme := "story"
+				if sessionState.Story != nil && strings.TrimSpace(sessionState.Story.Theme) != "" {
+					theme = strings.TrimSpace(sessionState.Story.Theme)
+				}
+				timestamp := time.Now().Format("20060102_150405")
+				outputFileName := fmt.Sprintf("%s_%s.mp4", theme, timestamp)
+				outputPath := filepath.Join(resourceDir, outputFileName)
+
+				log.Printf("开始拼接视频，输出路径: %s\n", outputPath)
+				if err := utils.ConcatVideosFromURLs(ctx, videoURLList, outputPath); err != nil {
+					log.Printf("视频拼接失败: %v\n", err)
+				} else {
+					log.Printf("视频拼接成功: %s\n", outputPath)
+				}
+			}
+		}
 
 		gen.Send(&adk.AgentEvent{
 			Output: &adk.AgentOutput{

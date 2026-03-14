@@ -1,3 +1,6 @@
 # Log files
 app.log
 *.log
+
+# Resource directory
+resource/
