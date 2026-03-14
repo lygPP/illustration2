@@ -31,8 +31,8 @@ func NewImageAgent(ctx context.Context) adk.Agent {
 		SubAgents: []adk.Agent{
 			NewImagePromptAgent(ctx),
 			imageLoopAgent,
-			NewVideoPromptAgent(ctx),
-			NewVideoGenerateAgent(ctx),
+			NewChapterVideoPromptAgent(ctx),
+			NewChapterVideoGenerateAgent(ctx),
 		},
 	})
 	if err != nil {

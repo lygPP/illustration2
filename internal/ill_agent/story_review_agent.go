@@ -51,6 +51,10 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 			if len(chapterParts) > 1 {
 				content = strings.ReplaceAll(strings.Join(chapterParts[1:], ""), "\n", "")
 			}
+			if title == "" || content == "" {
+				continue
+			}
+
 			log.Printf("title: %v\n content: %v\n", title, content)
 			storyChapters = append(storyChapters, model.StoryChapter{
 				Title:   title,

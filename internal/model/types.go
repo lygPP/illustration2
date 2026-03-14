@@ -18,6 +18,12 @@ type ImagePrompt struct {
 	Prompt       string `json:"prompt"`        // 图片生成提示词
 }
 
+// VideoPrompt 视频生成提示词结构
+type VideoPrompt struct {
+	ChapterIndex int    `json:"chapter_index"` // 对应章节索引
+	Prompt       string `json:"prompt"`        // 视频生成提示词
+}
+
 // AgentState agent状态结构
 type AgentState struct {
 	Story           *Story           `json:"story,omitempty"`            // 生成的故事

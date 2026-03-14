@@ -12,17 +12,19 @@ import (
 
 // SessionState 会话状态
 type IllustrationSessionState struct {
-	State            string              `json:"state"`                         // 当前状态
-	Story            *model.Story        `json:"story,omitempty"`               // 生成的故事
-	ImagePrompts     []model.ImagePrompt `json:"image_prompts,omitempty"`       // 图片生成提示词
-	GeneratedImages  map[int][]string    `json:"generated_images,omitempty"`    // 生成的图片，key为章节索引
-	VideoPrompt      string              `json:"video_prompt,omitempty"`        // 视频生成提示词
-	VideoURL         string              `json:"video_url,omitempty"`           // 最终生成的视频URL
-	NeedToEditStory  bool                `json:"need_to_edit_story,omitempty"`  // 是否需要编辑故事
-	StoryFeedback    string              `json:"story_feedback,omitempty"`      // 故事反馈
-	NeedToEditImage  bool                `json:"need_to_edit_image,omitempty"`  // 是否需要编辑图片
-	ImageFeedback    string              `json:"image_feedback,omitempty"`      // 图片反馈
-	NeedToEditImages bool                `json:"need_to_edit_images,omitempty"` // 是否需要编辑图片
+	State               string              `json:"state"`                           // 当前状态
+	Story               *model.Story        `json:"story,omitempty"`                 // 生成的故事
+	ImagePrompts        []model.ImagePrompt `json:"image_prompts,omitempty"`         // 图片生成提示词
+	GeneratedImages     map[int][]string    `json:"generated_images,omitempty"`      // 生成的图片，key为章节索引
+	VideoPrompt         string              `json:"video_prompt,omitempty"`          // 视频生成提示词
+	ChapterVideoPrompts []model.VideoPrompt `json:"chapter_video_prompts,omitempty"` // 视频生成提示词
+	ChapterVideoURLs    map[int]string      `json:"chapter_video_urls,omitempty"`
+	VideoURL            string              `json:"video_url,omitempty"`           // 最终生成的视频URL
+	NeedToEditStory     bool                `json:"need_to_edit_story,omitempty"`  // 是否需要编辑故事
+	StoryFeedback       string              `json:"story_feedback,omitempty"`      // 故事反馈
+	NeedToEditImage     bool                `json:"need_to_edit_image,omitempty"`  // 是否需要编辑图片
+	ImageFeedback       string              `json:"image_feedback,omitempty"`      // 图片反馈
+	NeedToEditImages    bool                `json:"need_to_edit_images,omitempty"` // 是否需要编辑图片
 }
 
 var sessions map[string]*IllustrationSessionState = make(map[string]*IllustrationSessionState) // 会话状态管理
@@ -44,10 +46,12 @@ func GetSessionState(ctx context.Context) *IllustrationSessionState {
 	if !exists {
 		// 创建新的会话状态
 		state = &IllustrationSessionState{
-			State:           "init",
-			Story:           &model.Story{},
-			ImagePrompts:    []model.ImagePrompt{},
-			GeneratedImages: make(map[int][]string),
+			State:               "init",
+			Story:               &model.Story{},
+			ImagePrompts:        []model.ImagePrompt{},
+			GeneratedImages:     make(map[int][]string),
+			ChapterVideoPrompts: []model.VideoPrompt{},
+			ChapterVideoURLs:    make(map[int]string),
 		}
 	}
 
