@@ -114,12 +114,15 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 
 				// videoPrompt := basePrompt + "\nAnimate from the provided first frame image. Duration 8 seconds. 16:9, 24fps. Smooth motion, cinematic lighting, consistent style, no on-screen text, no subtitles, no logos, no watermark."
 				videoPrompt := basePrompt
+				if sessionState.Story != nil && chapterIdx >= 0 && chapterIdx < len(sessionState.Story.Chapters) {
+					videoPrompt = fmt.Sprintf("%s\n其他要求：需要为视频内容配上解说，内容为“%s”", videoPrompt, strings.TrimSpace(sessionState.Story.Chapters[chapterIdx].Content))
+				}
 
 				videoParams := volc.VideoTaskParams{
 					Model:         r.ModelName,
 					Prompt:        videoPrompt,
 					FirstFrameURL: firstFrameURL,
-					Duration:      8,
+					Duration:      10,
 				}
 
 				taskID, err := r.ArkClient.CreateVideoTask(ctx2, videoParams)
