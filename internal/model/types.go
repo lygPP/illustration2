@@ -12,6 +12,18 @@ type Story struct {
 	Chapters []StoryChapter `json:"chapters"` // 故事章节列表
 }
 
+// CharacterProfile 全局角色设定与参考图
+type CharacterProfile struct {
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Role               string   `json:"role,omitempty"`
+	Description        string   `json:"description"`
+	VisualPrompt       string   `json:"visual_prompt"`
+	Aliases            []string `json:"aliases,omitempty"`
+	ChapterIndices     []int    `json:"chapter_indices,omitempty"`
+	ReferenceImageURLs []string `json:"reference_image_urls,omitempty"`
+}
+
 // ImagePrompt 图片生成提示词结构
 type ImagePrompt struct {
 	ChapterIndex int    `json:"chapter_index"` // 对应章节索引
@@ -20,16 +32,18 @@ type ImagePrompt struct {
 
 // VideoPrompt 视频生成提示词结构
 type VideoPrompt struct {
-	ChapterIndex int    `json:"chapter_index"` // 对应章节索引
-	Prompt       string `json:"prompt"`        // 视频生成提示词
+	ChapterIndex int      `json:"chapter_index"`           // 对应章节索引
+	Prompt       string   `json:"prompt"`                  // 视频生成提示词
+	CharacterIDs []string `json:"character_ids,omitempty"` // 本章涉及角色
 }
 
 // AgentState agent状态结构
 type AgentState struct {
-	Story           *Story           `json:"story,omitempty"`            // 生成的故事
-	ConfirmedStory  *Story           `json:"confirmed_story,omitempty"`  // 用户确认的故事
-	ImagePrompts    []ImagePrompt    `json:"image_prompts,omitempty"`    // 图片生成提示词
-	GeneratedImages map[int][]string `json:"generated_images,omitempty"` // 生成的图片，key为章节索引
-	ConfirmedImages map[int][]string `json:"confirmed_images,omitempty"` // 用户确认的图片，key为章节索引
-	VideoURL        string           `json:"video_url,omitempty"`        // 最终生成的视频URL
+	Story           *Story             `json:"story,omitempty"`            // 生成的故事
+	ConfirmedStory  *Story             `json:"confirmed_story,omitempty"`  // 用户确认的故事
+	ImagePrompts    []ImagePrompt      `json:"image_prompts,omitempty"`    // 图片生成提示词
+	GeneratedImages map[int][]string   `json:"generated_images,omitempty"` // 生成的图片，key为章节索引
+	ConfirmedImages map[int][]string   `json:"confirmed_images,omitempty"` // 用户确认的图片，key为章节索引
+	Characters      []CharacterProfile `json:"characters,omitempty"`       // 全局角色设定
+	VideoURL        string             `json:"video_url,omitempty"`        // 最终生成的视频URL
 }

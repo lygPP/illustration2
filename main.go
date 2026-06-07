@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"illustration2/internal/auth"
 	"illustration2/internal/config"
 	"illustration2/internal/handler"
 	"illustration2/internal/ill_agent"
@@ -36,17 +37,59 @@ func main() {
 
 	// 初始化Gin路由
 	router := gin.Default()
+	router.Static("/uploads", "./uploads")
 
 	// 初始化服务
 	arkClient := volc.NewArkClientDefault()
+	appStore, err := auth.NewStore("")
+	if err != nil {
+		log.Fatalf("初始化用户数据失败: %v", err)
+	}
+	if err := appStore.EnsureSuperAdmin(); err != nil {
+		log.Fatalf("初始化超级管理员失败: %v", err)
+	}
 	genService := service.NewGenerationService(arkClient)
-	genHandler := handler.NewGenerationHandler(genService)
-	agentStreamHandler := handler.NewAgentStreamHandler(genService)
+	authHandler := auth.NewHandler(appStore, arkClient)
+	genHandler := handler.NewGenerationHandler(genService, appStore)
+	agentStreamHandler := handler.NewAgentStreamHandler(genService, appStore)
 
-	router.POST("/api/generate", genHandler.HandleGeneration)
-	router.GET("/api/video/:task_id", genHandler.HandleGetVideo)
-	router.POST("/api/agent/stream", agentStreamHandler.HandleAgentStream)
-	router.POST("/api/agent/resume", agentStreamHandler.HandleAgentResume)
+	api := router.Group("/api")
+	api.POST("/auth/register", authHandler.Register)
+	api.POST("/auth/login", authHandler.Login)
+
+	protected := api.Group("/")
+	protected.Use(auth.Middleware(appStore))
+	protected.GET("/me", authHandler.Me)
+	protected.PUT("/me", authHandler.UpdateMe)
+	protected.POST("/me/avatar", authHandler.UploadAvatar)
+	protected.GET("/me/history", authHandler.History)
+	protected.GET("/me/usage", authHandler.Usage)
+	protected.GET("/personas", authHandler.ListPersonas)
+	protected.POST("/personas", authHandler.CreatePersona)
+	protected.PUT("/personas/:persona_id", authHandler.UpdatePersona)
+	protected.DELETE("/personas/:persona_id", authHandler.DeletePersona)
+	protected.POST("/personas/:persona_id/image", authHandler.UploadPersonaImage)
+	protected.GET("/voices", authHandler.ListVoices)
+	protected.POST("/voices", authHandler.CreateVoice)
+	protected.GET("/voices/:voice_id", authHandler.GetVoice)
+	protected.PUT("/voices/:voice_id", authHandler.UpdateVoice)
+	protected.DELETE("/voices/:voice_id", authHandler.DeleteVoice)
+	protected.POST("/voices/:voice_id/sample", authHandler.UploadVoiceSample)
+	protected.POST("/voices/:voice_id/clone", authHandler.CloneVoice)
+	protected.POST("/voices/:voice_id/preview", authHandler.PreviewVoice)
+	protected.POST("/generate", genHandler.HandleGeneration)
+	protected.GET("/video/:task_id", genHandler.HandleGetVideo)
+	protected.POST("/agent/stream", agentStreamHandler.HandleAgentStream)
+	protected.POST("/agent/resume", agentStreamHandler.HandleAgentResume)
+
+	admin := protected.Group("/admin")
+	admin.Use(auth.RequireSuperAdmin())
+	admin.GET("/users", authHandler.AdminListUsers)
+	admin.POST("/users", authHandler.AdminCreateUser)
+	admin.GET("/users/:user_id", authHandler.AdminGetUser)
+	admin.PUT("/users/:user_id", authHandler.AdminUpdateUser)
+	admin.POST("/users/:user_id/reset-password", authHandler.AdminResetPassword)
+	admin.DELETE("/users/:user_id", authHandler.AdminDeleteUser)
 
 	// 启动服务器
 	srv := &http.Server{

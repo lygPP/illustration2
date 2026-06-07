@@ -29,7 +29,7 @@ type ChapterVideoGenerateAgent struct {
 func NewChapterVideoGenerateAgent(ctx context.Context) adk.Agent {
 	a := ChapterVideoGenerateAgent{
 		AgentName: "章节视频生成助手",
-		AgentDesc: "一个可以基于每章首帧图并发生成视频的agent",
+		AgentDesc: "一个可以基于全局角色参考图并发生成章节视频的agent",
 		ModelName: "ep-20260305130909-qnwqm",
 		ArkClient: volc.NewArkClientWithTimeout(300 * time.Second),
 	}
@@ -52,18 +52,24 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
-		if len(sessionState.GeneratedImages) == 0 {
-			gen.Send(&adk.AgentEvent{Err: errors.New("no generated images found, cannot generate chapter videos")})
+		if sessionState.Story == nil || len(sessionState.Story.Chapters) == 0 {
+			gen.Send(&adk.AgentEvent{Err: errors.New("story is empty, cannot generate chapter videos")})
+			return
+		}
+		if len(sessionState.Characters) == 0 {
+			gen.Send(&adk.AgentEvent{Err: errors.New("characters are empty, cannot generate chapter videos")})
 			return
 		}
 
 		promptByChapter := make(map[int]string, len(sessionState.ChapterVideoPrompts))
+		characterIDsByChapter := make(map[int][]string, len(sessionState.ChapterVideoPrompts))
 		for _, p := range sessionState.ChapterVideoPrompts {
 			promptByChapter[p.ChapterIndex] = strings.TrimSpace(p.Prompt)
+			characterIDsByChapter[p.ChapterIndex] = p.CharacterIDs
 		}
 
-		var chapterIndices []int
-		for idx := range sessionState.GeneratedImages {
+		chapterIndices := make([]int, 0, len(sessionState.Story.Chapters))
+		for idx := range sessionState.Story.Chapters {
 			chapterIndices = append(chapterIndices, idx)
 		}
 		sort.Ints(chapterIndices)
@@ -85,19 +91,6 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 			go func() {
 				defer wg.Done()
 
-				images := sessionState.GeneratedImages[chapterIdx]
-				if len(images) == 0 {
-					resCh <- res{chapter: chapterIdx, err: fmt.Errorf("chapter %d has no images", chapterIdx)}
-					cancel()
-					return
-				}
-				firstFrameURL := images[0]
-				if strings.TrimSpace(firstFrameURL) == "" {
-					resCh <- res{chapter: chapterIdx, err: fmt.Errorf("chapter %d first frame url is empty", chapterIdx)}
-					cancel()
-					return
-				}
-
 				basePrompt := promptByChapter[chapterIdx]
 				if basePrompt == "" && sessionState.Story != nil && chapterIdx >= 0 && chapterIdx < len(sessionState.Story.Chapters) {
 					c := sessionState.Story.Chapters[chapterIdx]
@@ -117,12 +110,21 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 				if sessionState.Story != nil && chapterIdx >= 0 && chapterIdx < len(sessionState.Story.Chapters) {
 					videoPrompt = fmt.Sprintf("%s\n其他要求：需要为视频内容配上解说，内容为“%s”", videoPrompt, strings.TrimSpace(sessionState.Story.Chapters[chapterIdx].Content))
 				}
+				referenceImageURLs := ReferenceImagesForCharacterIDs(sessionState.Characters, characterIDsByChapter[chapterIdx])
+				if len(referenceImageURLs) == 0 {
+					referenceImageURLs = ReferenceImagesForCharacters(CharactersForChapter(sessionState.Characters, chapterIdx))
+				}
+				if len(referenceImageURLs) == 0 {
+					resCh <- res{chapter: chapterIdx, err: fmt.Errorf("chapter %d has no character reference images", chapterIdx)}
+					cancel()
+					return
+				}
 
 				videoParams := volc.VideoTaskParams{
-					Model:         r.ModelName,
-					Prompt:        videoPrompt,
-					FirstFrameURL: firstFrameURL,
-					Duration:      10,
+					Model:              r.ModelName,
+					Prompt:             videoPrompt,
+					ReferenceImageURLs: referenceImageURLs,
+					Duration:           10,
 				}
 
 				taskID, err := r.ArkClient.CreateVideoTask(ctx2, videoParams)

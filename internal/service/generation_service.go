@@ -97,8 +97,9 @@ func (s *GenerationService) generateVideo(ctx context.Context, req GenerationReq
 	}
 
 	params := volc.VideoTaskParams{
-		Model:  model,
-		Prompt: req.Prompt,
+		Model:    model,
+		Prompt:   req.Prompt,
+		Duration: 12,
 	}
 
 	// Separate URLs and Base64s from ImageList

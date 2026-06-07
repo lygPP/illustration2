@@ -1,18 +1,22 @@
 package handler
 
 import (
+	"illustration2/internal/auth"
 	"illustration2/internal/service"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 type GenerationHandler struct {
-	svc *service.GenerationService
+	svc   *service.GenerationService
+	store *auth.Store
 }
 
-func NewGenerationHandler(svc *service.GenerationService) *GenerationHandler {
-	return &GenerationHandler{svc: svc}
+func NewGenerationHandler(svc *service.GenerationService, store *auth.Store) *GenerationHandler {
+	return &GenerationHandler{svc: svc, store: store}
 }
 
 func (h *GenerationHandler) HandleGeneration(c *gin.Context) {
@@ -22,19 +26,51 @@ func (h *GenerationHandler) HandleGeneration(c *gin.Context) {
 		return
 	}
 
+	user, ok := auth.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	resp, err := h.svc.Generate(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	modelName := strings.TrimSpace(req.ModelName)
+	if modelName == "" {
+		modelName = req.GenerateResourceType
+	}
+	_ = h.store.AddUsage(user.ID, modelName, auth.EstimateTokens(req.Prompt), estimateCompletionTokens(resp))
+	_ = h.store.AddHistory(user.ID, auth.GenerationHistory{
+		Kind:         "generate",
+		ResourceType: req.GenerateResourceType,
+		ModelName:    modelName,
+		Prompt:       req.Prompt,
+		Status:       generationStatus(resp),
+		TaskID:       resp.TaskID,
+		PreviewURL:   previewURL(resp),
+		Summary:      generationSummary(resp),
+	})
+
 	c.JSON(http.StatusOK, resp)
 }
 
 func (h *GenerationHandler) HandleGetVideo(c *gin.Context) {
+	user, ok := auth.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	taskID := c.Param("task_id")
 	if taskID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
+		return
+	}
+	if !h.store.UserOwnsTask(user.ID, taskID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "task does not belong to current user"})
 		return
 	}
 
@@ -45,4 +81,47 @@ func (h *GenerationHandler) HandleGetVideo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func generationStatus(resp *service.GenerationResponse) string {
+	if resp == nil {
+		return "unknown"
+	}
+	if resp.TaskID != "" {
+		return "processing"
+	}
+	return "succeeded"
+}
+
+func generationSummary(resp *service.GenerationResponse) string {
+	if resp == nil {
+		return ""
+	}
+	if resp.Type == "image" {
+		return "generated " + strconv.Itoa(len(resp.Images)) + " image(s)"
+	}
+	if resp.Type == "video" && resp.TaskID != "" {
+		return "video task created"
+	}
+	return resp.Message
+}
+
+func previewURL(resp *service.GenerationResponse) string {
+	if resp == nil || len(resp.Images) == 0 {
+		return ""
+	}
+	if len(resp.Images[0]) > 2048 {
+		return ""
+	}
+	return resp.Images[0]
+}
+
+func estimateCompletionTokens(resp *service.GenerationResponse) int {
+	if resp == nil {
+		return 0
+	}
+	if resp.Message != "" {
+		return auth.EstimateTokens(resp.Message)
+	}
+	return len(resp.Images) * 32
 }

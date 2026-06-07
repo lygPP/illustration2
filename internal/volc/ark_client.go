@@ -127,6 +127,27 @@ type VideoTaskParams struct {
 	Duration              int
 }
 
+type VoiceCloneParams struct {
+	Model          string
+	Name           string
+	Description    string
+	SampleAudioURL string
+}
+
+type VoiceCloneResult struct {
+	TaskID          string
+	VoiceID         string
+	VoiceType       string
+	PreviewAudioURL string
+}
+
+type VoicePreviewParams struct {
+	Model     string
+	Text      string
+	VoiceID   string
+	VoiceType string
+}
+
 func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (string, error) {
 	if c.Mock {
 		return "mock-task", nil
@@ -245,6 +266,94 @@ func (c *ArkClient) GetVideoTask(ctx context.Context, taskID string) (string, st
 	return status, url, nil
 }
 
+func (c *ArkClient) CloneVoice(ctx context.Context, p VoiceCloneParams) (VoiceCloneResult, error) {
+	if c.Mock {
+		id := "mock_voice_" + fmt.Sprint(time.Now().UnixNano())
+		return VoiceCloneResult{
+			TaskID:          "mock-voice-task",
+			VoiceID:         id,
+			VoiceType:       id,
+			PreviewAudioURL: mockAudioDataURL(),
+		}, nil
+	}
+	path := strings.TrimSpace(os.Getenv("ARK_VOICE_CLONE_PATH"))
+	if path == "" {
+		return VoiceCloneResult{}, errors.New("ARK_VOICE_CLONE_PATH required when ARK_MOCK is disabled")
+	}
+	if p.Model == "" {
+		p.Model = strings.TrimSpace(os.Getenv("ARK_VOICE_CLONE_MODEL"))
+	}
+	if p.Model == "" {
+		return VoiceCloneResult{}, errors.New("ARK_VOICE_CLONE_MODEL required when ARK_MOCK is disabled")
+	}
+	body := map[string]any{
+		"model":            p.Model,
+		"name":             p.Name,
+		"description":      p.Description,
+		"sample_audio_url": p.SampleAudioURL,
+	}
+	var resp map[string]any
+	if err := c.postJSON(ctx, path, body, &resp); err != nil {
+		return VoiceCloneResult{}, err
+	}
+	result := VoiceCloneResult{
+		TaskID:          getString(resp, "task_id"),
+		VoiceID:         getString(resp, "voice_id"),
+		VoiceType:       getString(resp, "voice_type"),
+		PreviewAudioURL: getString(resp, "preview_audio_url"),
+	}
+	if result.VoiceID == "" {
+		result.VoiceID = getString(resp, "id")
+	}
+	if result.VoiceType == "" {
+		result.VoiceType = result.VoiceID
+	}
+	if result.VoiceID == "" && result.VoiceType == "" && result.TaskID == "" {
+		return VoiceCloneResult{}, errors.New("no voice clone result returned")
+	}
+	return result, nil
+}
+
+func (c *ArkClient) GenerateVoicePreview(ctx context.Context, p VoicePreviewParams) (string, error) {
+	if c.Mock {
+		return mockAudioDataURL(), nil
+	}
+	path := strings.TrimSpace(os.Getenv("ARK_VOICE_PREVIEW_PATH"))
+	if path == "" {
+		return "", errors.New("ARK_VOICE_PREVIEW_PATH required when ARK_MOCK is disabled")
+	}
+	if p.Model == "" {
+		p.Model = strings.TrimSpace(os.Getenv("ARK_VOICE_PREVIEW_MODEL"))
+	}
+	if p.Model == "" {
+		return "", errors.New("ARK_VOICE_PREVIEW_MODEL required when ARK_MOCK is disabled")
+	}
+	text := strings.TrimSpace(p.Text)
+	if text == "" {
+		text = "这是音色试听。"
+	}
+	body := map[string]any{
+		"model":      p.Model,
+		"text":       text,
+		"voice_id":   p.VoiceID,
+		"voice_type": p.VoiceType,
+	}
+	var resp map[string]any
+	if err := c.postJSON(ctx, path, body, &resp); err != nil {
+		return "", err
+	}
+	if url := getString(resp, "audio_url"); url != "" {
+		return url, nil
+	}
+	if url := getString(resp, "url"); url != "" {
+		return url, nil
+	}
+	if b64 := getString(resp, "audio_base64"); b64 != "" {
+		return "data:audio/wav;base64," + b64, nil
+	}
+	return "", errors.New("no preview audio returned")
+}
+
 func (c *ArkClient) postJSON(ctx context.Context, path string, body any, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -275,6 +384,10 @@ func (c *ArkClient) postJSON(ctx context.Context, path string, body any, out any
 	return json.Unmarshal(bodyBytes, out)
 }
 
+func mockAudioDataURL() string {
+	return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
+}
+
 func getString(m map[string]any, k string) string {
 	if v, ok := m[k]; ok {
 		if s, ok := v.(string); ok {
@@ -285,6 +398,9 @@ func getString(m map[string]any, k string) string {
 }
 
 func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string) (string, error) {
+	if c.Mock {
+		return "A warm children's book animation shot with consistent character appearance, gentle camera movement, expressive action, soft natural light, no subtitles, no text, no watermark.", nil
+	}
 	if model == "" {
 		return "", errors.New("model required")
 	}

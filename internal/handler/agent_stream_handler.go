@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"illustration2/internal/auth"
 	"illustration2/internal/ill_agent"
 	"illustration2/internal/service"
 	"log"
@@ -18,17 +19,20 @@ import (
 
 type AgentStreamHandler struct {
 	genService *service.GenerationService
+	store      *auth.Store
 	sessions   map[string]*agentSession
 	sessionsMu sync.RWMutex
 }
 
 type agentSession struct {
 	runner *adk.Runner
+	userID string
 }
 
-func NewAgentStreamHandler(genService *service.GenerationService) *AgentStreamHandler {
+func NewAgentStreamHandler(genService *service.GenerationService, store *auth.Store) *AgentStreamHandler {
 	return &AgentStreamHandler{
 		genService: genService,
+		store:      store,
 		sessions:   make(map[string]*agentSession),
 	}
 }
@@ -55,6 +59,12 @@ type eventData struct {
 }
 
 func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
+	user, ok := auth.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req AgentStreamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -77,6 +87,7 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 
 	// Create a context that will be canceled if client disconnects
 	ctx, _ := context.WithCancel(c.Request.Context())
+	ctx = context.WithValue(ctx, "sessionID", sessionID)
 
 	// Channel to receive events from the agent
 	eventChan := make(chan *adk.AgentEvent, 100)
@@ -96,10 +107,20 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 	// Store session
 	session := &agentSession{
 		runner: runner,
+		userID: user.ID,
 	}
 	h.sessionsMu.Lock()
 	h.sessions[sessionID] = session
 	h.sessionsMu.Unlock()
+	_ = h.store.AddUsage(user.ID, "illustration-agent", auth.EstimateTokens(theme), 0)
+	_ = h.store.AddHistory(user.ID, auth.GenerationHistory{
+		Kind:      "agent_stream",
+		ModelName: "illustration-agent",
+		Prompt:    theme,
+		Status:    "processing",
+		TaskID:    sessionID,
+		Summary:   "illustration agent session started",
+	})
 
 	// Start the agent in a goroutine
 	var wg sync.WaitGroup
@@ -250,6 +271,12 @@ type AgentResumeRequest struct {
 }
 
 func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_security_alert IDOR
+	user, ok := auth.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req AgentResumeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -267,6 +294,19 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_secur
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
+	if session.userID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "session does not belong to current user"})
+		return
+	}
+	_ = h.store.AddUsage(user.ID, "illustration-agent", auth.EstimateTokens(req.Input), 0)
+	_ = h.store.AddHistory(user.ID, auth.GenerationHistory{
+		Kind:      "agent_resume",
+		ModelName: "illustration-agent",
+		Prompt:    req.Input,
+		Status:    "processing",
+		TaskID:    req.SessionID,
+		Summary:   "illustration agent resumed",
+	})
 
 	// Set headers for SSE
 	c.Writer.Header().Set("Content-Type", "text/event-stream")

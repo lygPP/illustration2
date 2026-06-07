@@ -4,3 +4,6 @@ app.log
 
 # Resource directory
 resource/
+
+# Uploaded local files
+uploads/
