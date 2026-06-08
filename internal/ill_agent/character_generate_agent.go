@@ -33,7 +33,7 @@ func NewCharacterGenerateAgent(ctx context.Context) adk.Agent {
 	return CharacterGenerateAgent{
 		AgentName:  "角色生成助手",
 		AgentDesc:  characterGenerateInstruction,
-		ModelName:  "ep-20250220181854-c8s82",
+		ModelName:  "ep-20260608120832-fq5kh",
 		ImageModel: "ep-20251124201143-rwjnq",
 		ArkClient:  volc.NewArkClientWithTimeout(180 * time.Second),
 	}

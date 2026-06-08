@@ -46,7 +46,7 @@ func NewChildIllustrationAgent(arkClient *volc.ArkClient, storyTool, imageTool, 
 		APIKey:     apiKey,
 		Region:     "cn-beijing",
 		HTTPClient: &http.Client{},
-		Model:      "ep-20250220181854-c8s82",
+		Model:      "ep-20260608120832-fq5kh",
 	})
 
 	return &ChildIllustrationAgent{

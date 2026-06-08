@@ -27,12 +27,10 @@ func NewImageAgent(ctx context.Context) adk.Agent {
 	}
 	la, err := adk.NewSequentialAgent(ctx, &adk.SequentialAgentConfig{
 		Name:        "图片小助手",
-		Description: "一个图片生成助手",
+		Description: "逐章生成并审核首帧图的图片生成助手",
 		SubAgents: []adk.Agent{
 			NewImagePromptAgent(ctx),
 			imageLoopAgent,
-			NewChapterVideoPromptAgent(ctx),
-			NewChapterVideoGenerateAgent(ctx),
 		},
 	})
 	if err != nil {

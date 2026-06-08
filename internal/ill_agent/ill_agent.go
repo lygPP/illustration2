@@ -57,7 +57,7 @@ func NewIllustrationAgent(ctx context.Context) (*IllustrationAgent, error) {
 	chatModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
 		APIKey:     arkClient.APIKey,
 		HTTPClient: arkClient.HTTPClient,
-		Model:      "ep-20250220181854-c8s82",
+		Model:      "ep-20260608120832-fq5kh",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat model: %w", err)

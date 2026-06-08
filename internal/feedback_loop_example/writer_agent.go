@@ -17,7 +17,7 @@ func NewWriterAgent() adk.Agent {
 	apiKey := os.Getenv("ARK_API_KEY")
 	chatModel, err := ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
 		APIKey:  apiKey,
-		Model:   "ep-20250220181854-c8s82",
+		Model:   "ep-20260608120832-fq5kh",
 		BaseURL: "https://ark.cn-beijing.volces.com/api/v3",
 		Thinking: &arkModel.Thinking{
 			Type: arkModel.ThinkingTypeDisabled,

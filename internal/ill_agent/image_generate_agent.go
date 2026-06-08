@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"illustration2/internal/volc"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -45,35 +46,56 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
-		// 调用工具生成每个章节的图片提示词
-		generatedImages := make(map[int][]string)
-		for _, prompt := range sessionState.ImagePrompts {
-			generateImagesReq := volc.ImageGenParams{
-				Model:                     r.ModelName,
-				Prompt:                    prompt.Prompt,
-				Size:                      "2304x1728",
-				SequentialImageGeneration: "auto",
-				MaxImages:                 1,
-			}
-			if sessionState.ImageFeedback != "" {
-				generateImagesReq.Prompt = fmt.Sprintf("%s\n%s", generateImagesReq.Prompt, sessionState.ImageFeedback)
-				if len(sessionState.GeneratedImages[prompt.ChapterIndex]) > 0 {
-					generateImagesReq.ImageInputs = sessionState.GeneratedImages[prompt.ChapterIndex]
-				}
-			}
-			urls, err := r.ArkClient.GenerateImages(ctx, generateImagesReq)
-			if err != nil {
-				log.Fatal(fmt.Errorf("image generation failed: %+v", err))
-				event := &adk.AgentEvent{
-					Err: errors.New("image generation failed"),
-				}
-				gen.Send(event)
-				return
-			}
-			generatedImages[prompt.ChapterIndex] = urls
+		if sessionState.Story == nil || len(sessionState.Story.Chapters) == 0 {
+			gen.Send(&adk.AgentEvent{Err: errors.New("story is empty, cannot generate first frame image")})
+			return
 		}
-		log.Printf("generatedImages: %+v\n", generatedImages)
-		sessionState.GeneratedImages = generatedImages
+		if sessionState.CurrentImageChapter < 0 || sessionState.CurrentImageChapter >= len(sessionState.Story.Chapters) {
+			gen.Send(&adk.AgentEvent{Err: errors.New("current image chapter is out of range")})
+			return
+		}
+		if sessionState.GeneratedImages == nil {
+			sessionState.GeneratedImages = make(map[int][]string)
+		}
+		chapterIndex := sessionState.CurrentImageChapter
+		imagePrompt := ""
+		for _, prompt := range sessionState.ImagePrompts {
+			if prompt.ChapterIndex == chapterIndex {
+				imagePrompt = strings.TrimSpace(prompt.Prompt)
+				break
+			}
+		}
+		if imagePrompt == "" {
+			chapter := sessionState.Story.Chapters[chapterIndex]
+			imagePrompt = fmt.Sprintf("%s\n%s", strings.TrimSpace(chapter.Title), strings.TrimSpace(chapter.Content))
+		}
+
+		referenceImages := ReferenceImagesForCharacters(CharactersForChapter(sessionState.Characters, chapterIndex))
+		imageInputs := append([]string{}, referenceImages...)
+		if sessionState.ImageFeedback != "" && len(sessionState.GeneratedImages[chapterIndex]) > 0 {
+			imageInputs = append(imageInputs, sessionState.GeneratedImages[chapterIndex]...)
+			imagePrompt = fmt.Sprintf("%s\nRevision feedback: %s", imagePrompt, strings.TrimSpace(sessionState.ImageFeedback))
+		}
+
+		generateImagesReq := volc.ImageGenParams{
+			Model:                     r.ModelName,
+			Prompt:                    imagePrompt,
+			Size:                      "2304x1296",
+			SequentialImageGeneration: "disabled",
+			MaxImages:                 1,
+			ImageInputs:               imageInputs,
+		}
+		urls, err := r.ArkClient.GenerateImages(ctx, generateImagesReq)
+		if err != nil {
+			log.Fatal(fmt.Errorf("image generation failed: %+v", err))
+			event := &adk.AgentEvent{
+				Err: errors.New("image generation failed"),
+			}
+			gen.Send(event)
+			return
+		}
+		sessionState.GeneratedImages[chapterIndex] = urls
+		log.Printf("generatedImages: %+v\n", sessionState.GeneratedImages)
 		sessionState.State = "image_generate"
 		SaveSessionState(ctx, sessionState)
 
@@ -83,7 +105,7 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 					IsStreaming: false,
 					Message: &schema.Message{
 						Role:    schema.Assistant,
-						Content: "Image generation completed",
+						Content: fmt.Sprintf("Chapter %d first frame image generated", chapterIndex+1),
 					},
 				},
 			},

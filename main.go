@@ -71,6 +71,7 @@ func main() {
 	protected.POST("/personas/:persona_id/image", authHandler.UploadPersonaImage)
 	protected.GET("/voices", authHandler.ListVoices)
 	protected.POST("/voices", authHandler.CreateVoice)
+	protected.POST("/voices/clone-create", authHandler.CreateClonedVoice)
 	protected.GET("/voices/:voice_id", authHandler.GetVoice)
 	protected.PUT("/voices/:voice_id", authHandler.UpdateVoice)
 	protected.DELETE("/voices/:voice_id", authHandler.DeleteVoice)

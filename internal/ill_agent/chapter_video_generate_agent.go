@@ -60,12 +60,14 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 			gen.Send(&adk.AgentEvent{Err: errors.New("characters are empty, cannot generate chapter videos")})
 			return
 		}
+		if sessionState.ConfirmedImages == nil || len(sessionState.ConfirmedImages) == 0 {
+			gen.Send(&adk.AgentEvent{Err: errors.New("confirmed first frame images are empty, cannot generate chapter videos")})
+			return
+		}
 
 		promptByChapter := make(map[int]string, len(sessionState.ChapterVideoPrompts))
-		characterIDsByChapter := make(map[int][]string, len(sessionState.ChapterVideoPrompts))
 		for _, p := range sessionState.ChapterVideoPrompts {
 			promptByChapter[p.ChapterIndex] = strings.TrimSpace(p.Prompt)
-			characterIDsByChapter[p.ChapterIndex] = p.CharacterIDs
 		}
 
 		chapterIndices := make([]int, 0, len(sessionState.Story.Chapters))
@@ -105,26 +107,22 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 					return
 				}
 
-				// videoPrompt := basePrompt + "\nAnimate from the provided first frame image. Duration 8 seconds. 16:9, 24fps. Smooth motion, cinematic lighting, consistent style, no on-screen text, no subtitles, no logos, no watermark."
-				videoPrompt := basePrompt
+				videoPrompt := basePrompt + "\nAnimate from the provided first frame image. Keep the opening frame visually consistent with the image. Smooth motion, cinematic lighting, consistent style, no on-screen text, no subtitles, no logos, no watermark."
 				if sessionState.Story != nil && chapterIdx >= 0 && chapterIdx < len(sessionState.Story.Chapters) {
 					videoPrompt = fmt.Sprintf("%s\n其他要求：需要为视频内容配上解说，内容为“%s”", videoPrompt, strings.TrimSpace(sessionState.Story.Chapters[chapterIdx].Content))
 				}
-				referenceImageURLs := ReferenceImagesForCharacterIDs(sessionState.Characters, characterIDsByChapter[chapterIdx])
-				if len(referenceImageURLs) == 0 {
-					referenceImageURLs = ReferenceImagesForCharacters(CharactersForChapter(sessionState.Characters, chapterIdx))
-				}
-				if len(referenceImageURLs) == 0 {
-					resCh <- res{chapter: chapterIdx, err: fmt.Errorf("chapter %d has no character reference images", chapterIdx)}
+				firstFrameImages := sessionState.ConfirmedImages[chapterIdx]
+				if len(firstFrameImages) == 0 {
+					resCh <- res{chapter: chapterIdx, err: fmt.Errorf("chapter %d has no confirmed first frame image", chapterIdx+1)}
 					cancel()
 					return
 				}
 
 				videoParams := volc.VideoTaskParams{
-					Model:              r.ModelName,
-					Prompt:             videoPrompt,
-					ReferenceImageURLs: referenceImageURLs,
-					Duration:           10,
+					Model:         r.ModelName,
+					Prompt:        videoPrompt,
+					FirstFrameURL: firstFrameImages[0],
+					Duration:      10,
 				}
 
 				taskID, err := r.ArkClient.CreateVideoTask(ctx2, videoParams)

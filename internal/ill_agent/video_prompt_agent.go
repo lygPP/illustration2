@@ -36,7 +36,7 @@ Theme: %s
 Chapters:
 %s
 `,
-		ModelName: "ep-20250220181854-c8s82",
+		ModelName: "ep-20260608120832-fq5kh",
 		ArkClient: volc.NewArkClientDefault(),
 	}
 	return a

@@ -17,6 +17,8 @@ type IllustrationSessionState struct {
 	Characters           []model.CharacterProfile `json:"characters,omitempty"`            // 全局角色设定和参考图
 	ImagePrompts         []model.ImagePrompt      `json:"image_prompts,omitempty"`         // 图片生成提示词
 	GeneratedImages      map[int][]string         `json:"generated_images,omitempty"`      // 生成的图片，key为章节索引
+	ConfirmedImages      map[int][]string         `json:"confirmed_images,omitempty"`      // 用户确认的首帧图，key为章节索引
+	CurrentImageChapter  int                      `json:"current_image_chapter,omitempty"` // 当前正在生成/审核首帧图的章节索引
 	VideoPrompt          string                   `json:"video_prompt,omitempty"`          // 视频生成提示词
 	ChapterVideoPrompts  []model.VideoPrompt      `json:"chapter_video_prompts,omitempty"` // 视频生成提示词
 	ChapterVideoURLs     map[int]string           `json:"chapter_video_urls,omitempty"`
@@ -54,6 +56,7 @@ func GetSessionState(ctx context.Context) *IllustrationSessionState {
 			Characters:          []model.CharacterProfile{},
 			ImagePrompts:        []model.ImagePrompt{},
 			GeneratedImages:     make(map[int][]string),
+			ConfirmedImages:     make(map[int][]string),
 			ChapterVideoPrompts: []model.VideoPrompt{},
 			ChapterVideoURLs:    make(map[int]string),
 		}
@@ -76,6 +79,7 @@ func NewMKAgent(ctx context.Context) adk.Agent {
 		SubAgents: []adk.Agent{
 			NewStoryAgent(ctx),
 			NewCharacterAgent(ctx),
+			NewImageAgent(ctx),
 			NewChapterVideoAgent(ctx),
 		},
 	})

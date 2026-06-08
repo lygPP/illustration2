@@ -45,22 +45,40 @@ func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 			gen.Send(event)
 			return
 		}
+		if sessionState.Story == nil || len(sessionState.Story.Chapters) == 0 {
+			gen.Send(&adk.AgentEvent{Err: errors.New("story is empty, cannot review first frame image")})
+			return
+		}
+		chapterIndex := sessionState.CurrentImageChapter
+		if chapterIndex < 0 || chapterIndex >= len(sessionState.Story.Chapters) {
+			gen.Send(&adk.AgentEvent{Err: errors.New("current image chapter is out of range")})
+			return
+		}
+		urls := sessionState.GeneratedImages[chapterIndex]
+		if len(urls) == 0 {
+			gen.Send(&adk.AgentEvent{Err: fmt.Errorf("chapter %d first frame image not found", chapterIndex+1)})
+			return
+		}
 
 		sessionState.State = "image_review"
 		SaveSessionState(ctx, sessionState)
 
 		infoList := make([]map[string]interface{}, 0)
 		infoList = append(infoList, map[string]interface{}{
-			"text": "已生成图片如下：",
+			"text": fmt.Sprintf("已生成第%d章首帧图，请审核：", chapterIndex+1),
 		})
-		for i, urls := range sessionState.GeneratedImages {
-			infoList = append(infoList, map[string]interface{}{
-				"text":      fmt.Sprintf("第%d章节组图：", i+1),
-				"imageUrls": urls,
-			})
-		}
+		chapter := sessionState.Story.Chapters[chapterIndex]
 		infoList = append(infoList, map[string]interface{}{
-			"text": "如果图片符合要求，请回复ok。否则提供反馈。",
+			"chapterIndex":   chapterIndex,
+			"chapterTitle":   chapter.Title,
+			"chapterContent": chapter.Content,
+		})
+		infoList = append(infoList, map[string]interface{}{
+			"text":      fmt.Sprintf("第%d章首帧图：", chapterIndex+1),
+			"imageUrls": urls,
+		})
+		infoList = append(infoList, map[string]interface{}{
+			"text": "如果该章节首帧图符合要求，请回复ok。否则提供反馈，我会先重生成本章节，再继续下一章。",
 		})
 		event := adk.StatefulInterrupt(ctx, infoList, sessionState.State)
 		gen.Send(event)
@@ -99,15 +117,41 @@ func (r ImageReviewAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 			sessionState.ImageFeedback = feedback
 		} else {
 			sessionState.NeedToEditImages = false
+			sessionState.ImageFeedback = ""
 		}
 		SaveSessionState(ctx, sessionState)
 
 		if !sessionState.NeedToEditImages {
-			event := &adk.AgentEvent{
-				Action: adk.NewBreakLoopAction(r.AgentName),
-				// Action: adk.NewExitAction(),
+			if sessionState.ConfirmedImages == nil {
+				sessionState.ConfirmedImages = make(map[int][]string)
 			}
-			gen.Send(event)
+			chapterIndex := sessionState.CurrentImageChapter
+			if len(sessionState.GeneratedImages[chapterIndex]) == 0 {
+				gen.Send(&adk.AgentEvent{Err: fmt.Errorf("chapter %d first frame image not found", chapterIndex+1)})
+				return
+			}
+			sessionState.ConfirmedImages[chapterIndex] = sessionState.GeneratedImages[chapterIndex]
+			if sessionState.Story == nil || chapterIndex >= len(sessionState.Story.Chapters)-1 {
+				SaveSessionState(ctx, sessionState)
+				event := &adk.AgentEvent{
+					Action: adk.NewBreakLoopAction(r.AgentName),
+				}
+				gen.Send(event)
+				return
+			}
+			sessionState.CurrentImageChapter = chapterIndex + 1
+			SaveSessionState(ctx, sessionState)
+			gen.Send(&adk.AgentEvent{
+				Output: &adk.AgentOutput{
+					MessageOutput: &adk.MessageVariant{
+						IsStreaming: false,
+						Message: &schema.Message{
+							Role:    schema.Assistant,
+							Content: fmt.Sprintf("第%d章首帧图已确认，继续生成第%d章首帧图", chapterIndex+1, chapterIndex+2),
+						},
+					},
+				},
+			})
 			return
 		}
 
