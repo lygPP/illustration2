@@ -36,7 +36,7 @@ const (
 	CmdNoNeedToEdit          = "no need to edit"
 )
 
-const storyWriterInstruction = `You are a children's story writer. Generate a 3-chapter story based on the user's theme. Respond in valid JSON format: {"chapters": [{"chapter_title": "...", "chapter_body": "..."}]}`
+const storyWriterInstruction = `You are a children's story writer. Generate a 3-chapter story based on the user's theme. Each chapter_body should be sized for about a 10-second narrated video segment: concise, visually actionable, and roughly 35-55 Chinese characters or 1-2 short sentences. Avoid long paragraphs, side explanations, and multiple major scene changes inside one chapter. Respond in valid JSON format: {"chapters": [{"chapter_title": "...", "chapter_body": "..."}]}`
 const promptEngineerInstruction = `You are a prompt engineer. For each chapter, add a detailed "image_prompt". Respond in valid JSON.`
 
 type SessionState struct {
@@ -98,9 +98,13 @@ func (a *IllustrationAgent) handleStoryGeneration(ctx context.Context, state *Se
 	log.Println("State: Generating story for theme:", theme)
 	state.Theme = theme
 	content, err := a.runLLM(ctx, storyWriterInstruction, fmt.Sprintf("Theme: %s", theme))
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	story, err := a.parseStory(content)
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	state.Story = story
 	state.State = StateStoryWaitingReview
 	return state, story, nil
@@ -111,9 +115,13 @@ func (a *IllustrationAgent) handleStoryRevision(ctx context.Context, state *Sess
 	storyBytes, _ := json.Marshal(state.Story)
 	prompt := fmt.Sprintf("Revise the following story based on this feedback: '%s'.\n\nStory:\n%s", feedback, string(storyBytes))
 	content, err := a.runLLM(ctx, storyWriterInstruction, prompt)
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	story, err := a.parseStory(content)
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	state.Story = story
 	state.State = StateStoryWaitingReview
 	return state, story, nil
@@ -123,9 +131,13 @@ func (a *IllustrationAgent) handlePromptGeneration(ctx context.Context, state *S
 	log.Println("State: Generating prompts...")
 	storyBytes, _ := json.Marshal(state.Story)
 	content, err := a.runLLM(ctx, promptEngineerInstruction, string(storyBytes))
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	storyWithPrompts, err := a.parseStory(content)
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	state.Story = storyWithPrompts
 	state.State = StatePromptsGenerated
 	return a.handleImageGeneration(ctx, state)
@@ -136,11 +148,15 @@ func (a *IllustrationAgent) handleImageGeneration(ctx context.Context, state *Se
 	for _, chapter := range state.Story.Chapters {
 		toolInput := fmt.Sprintf(`{"prompt": "%s"}`, chapter.ImagePrompt)
 		output, err := a.imageTool.InvokableRun(ctx, toolInput)
-		if err != nil { return state, nil, err }
+		if err != nil {
+			return state, nil, err
+		}
 		var resp tools.ImageToolResp
 		if err := json.Unmarshal([]byte(output), &resp); err == nil && len(resp.Images) > 0 {
 			chapter.ImageURL = resp.Images[0]
-		} else { return state, nil, fmt.Errorf("failed to parse image tool output: %s", output) }
+		} else {
+			return state, nil, fmt.Errorf("failed to parse image tool output: %s", output)
+		}
 	}
 	state.State = StateImagesWaitingReview
 	return state, state.Story, nil
@@ -152,11 +168,15 @@ func (a *IllustrationAgent) handleImageRevision(ctx context.Context, state *Sess
 		newPrompt := fmt.Sprintf("%s. User feedback: %s", chapter.ImagePrompt, feedback)
 		toolInput := fmt.Sprintf(`{"prompt": "%s"}`, newPrompt)
 		output, err := a.imageTool.InvokableRun(ctx, toolInput)
-		if err != nil { return state, nil, err }
+		if err != nil {
+			return state, nil, err
+		}
 		var resp tools.ImageToolResp
 		if err := json.Unmarshal([]byte(output), &resp); err == nil && len(resp.Images) > 0 {
 			chapter.ImageURL = resp.Images[0]
-		} else { return state, nil, fmt.Errorf("failed to parse revised image tool output: %s", output) }
+		} else {
+			return state, nil, fmt.Errorf("failed to parse revised image tool output: %s", output)
+		}
 	}
 	state.State = StateImagesWaitingReview
 	return state, state.Story, nil
@@ -165,15 +185,21 @@ func (a *IllustrationAgent) handleImageRevision(ctx context.Context, state *Sess
 func (a *IllustrationAgent) handleVideoGeneration(ctx context.Context, state *SessionState) (*SessionState, any, error) {
 	log.Println("State: Generating video...")
 	var refImages []string
-	for _, ch := range state.Story.Chapters { refImages = append(refImages, ch.ImageURL) }
+	for _, ch := range state.Story.Chapters {
+		refImages = append(refImages, ch.ImageURL)
+	}
 	videoArgs := tools.VideoToolArgs{Prompt: state.Theme, ReferenceImageURLs: refImages}
 	argsBytes, _ := json.Marshal(videoArgs)
 	output, err := a.videoTool.InvokableRun(ctx, string(argsBytes))
-	if err != nil { return state, nil, err }
+	if err != nil {
+		return state, nil, err
+	}
 	var resp tools.VideoToolResp
 	if err := json.Unmarshal([]byte(output), &resp); err == nil {
 		state.VideoURL = resp.VideoURL
-	} else { return state, nil, fmt.Errorf("failed to parse video tool output: %s", output) }
+	} else {
+		return state, nil, fmt.Errorf("failed to parse video tool output: %s", output)
+	}
 	state.State = StateVideoGenerated
 	return state, state.VideoURL, nil
 }

@@ -38,6 +38,7 @@ func main() {
 	// 初始化Gin路由
 	router := gin.Default()
 	router.Static("/uploads", "./uploads")
+	router.Static("/resource", "./resource")
 
 	// 初始化服务
 	arkClient := volc.NewArkClientDefault()

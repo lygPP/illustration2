@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -109,7 +110,119 @@ func ConcatVideosFromURLs(ctx context.Context, videoURLs []string, outputPath st
 	return ConcatVideos(ctx, localVideos, outputPath)
 }
 
+func SaveAudioFile(audio []byte, outputPath string) error {
+	if len(audio) == 0 {
+		return fmt.Errorf("audio data required")
+	}
+	if strings.TrimSpace(outputPath) == "" {
+		return fmt.Errorf("output path required")
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(outputPath, audio, 0644)
+}
+
+func MuxVideoWithAudioFromURL(ctx context.Context, videoURL, audioPath, outputPath string) error {
+	if strings.TrimSpace(videoURL) == "" {
+		return fmt.Errorf("video url required")
+	}
+	if strings.TrimSpace(audioPath) == "" {
+		return fmt.Errorf("audio path required")
+	}
+	if strings.TrimSpace(outputPath) == "" {
+		return fmt.Errorf("output path required")
+	}
+	if _, err := os.Stat(audioPath); os.IsNotExist(err) {
+		return fmt.Errorf("audio file not found: %s", audioPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	randomNum := rand.Intn(10000)
+	tmpDir := filepath.Join(os.TempDir(), fmt.Sprintf("video_mux_%s_%04d", timestamp, randomNum))
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	localVideo := filepath.Join(tmpDir, "input.mp4")
+	if err := downloadVideo(ctx, videoURL, localVideo); err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",
+		"-i", localVideo,
+		"-i", audioPath,
+		"-map", "0:v:0",
+		"-map", "1:a:0",
+		"-c:v", "copy",
+		"-c:a", "aac",
+		"-shortest",
+		outputPath,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg mux failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func CreateSilentVideo(ctx context.Context, outputPath string, duration int) error {
+	if strings.TrimSpace(outputPath) == "" {
+		return fmt.Errorf("output path required")
+	}
+	if duration <= 0 {
+		duration = 10
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",
+		"-f", "lavfi",
+		"-i", fmt.Sprintf("color=c=black:s=1280x720:d=%d", duration),
+		"-pix_fmt", "yuv420p",
+		outputPath,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg create silent video failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func ResourceURL(path string) string {
+	clean := filepath.ToSlash(filepath.Clean(path))
+	if strings.HasPrefix(clean, "resource/") {
+		return "/" + clean
+	}
+	if clean == "resource" {
+		return "/resource"
+	}
+	return "/" + clean
+}
+
 func downloadVideo(ctx context.Context, url, localPath string) error {
+	if strings.HasPrefix(url, "/") {
+		src := strings.TrimPrefix(url, "/")
+		in, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		f, err := os.Create(localPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(f, in)
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

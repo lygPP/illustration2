@@ -442,8 +442,6 @@ func (c *ArkClient) postJSON(ctx context.Context, path string, body any, out any
 	}
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	// 打印req信息和header
-	fmt.Printf("POST %s\n%s\n%s\n", req.URL.String(), req.Header, string(b))
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err

@@ -3,13 +3,13 @@ package auth
 import (
 	"context"
 	"fmt"
+	"illustration2/internal/indextts"
+	"illustration2/internal/utils"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"illustration2/internal/volc"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,6 +28,10 @@ type voiceRequest struct {
 type voicePreviewRequest struct {
 	Text string `json:"text"`
 }
+
+const (
+	defaultVoicePreviewText = "这是我的专属音色试听。"
+)
 
 func (h *Handler) ListPersonas(c *gin.Context) {
 	user, ok := CurrentUser(c)
@@ -170,43 +174,17 @@ func (h *Handler) CreateClonedVoice(c *gin.Context) {
 	name := strings.TrimSpace(c.PostForm("name"))
 	description := strings.TrimSpace(c.PostForm("description"))
 	previewText := strings.TrimSpace(c.PostForm("preview_text"))
-	speakerID := strings.TrimSpace(c.PostForm("speaker_id"))
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name required"})
 		return
 	}
 
-	sampleURL, err := saveUpload(c, "sample", filepath.Join("uploads", "voices", user.ID), user.ID, 20*1024*1024, map[string]bool{
+	sampleURL, err := saveUpload(c, "sample", filepath.Join("uploads", "voice_samples", user.ID), user.ID, 20*1024*1024, map[string]bool{
 		".wav": true, ".mp3": true, ".m4a": true, ".aac": true, ".ogg": true, ".webm": true,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-
-	client := h.arkClient
-	if client == nil {
-		client = volc.NewArkClientDefault()
-	}
-	result, err := client.CloneVoice(context.Background(), volc.VoiceCloneParams{
-		Name:           name,
-		Description:    description,
-		SampleAudioURL: sampleURL,
-		SpeakerID:      speakerID,
-	})
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if previewText != "" && result.VoiceType != "" {
-		if previewURL, previewErr := client.GenerateVoicePreview(context.Background(), volc.VoicePreviewParams{
-			Text:      previewText,
-			VoiceType: result.VoiceType,
-			VoiceID:   result.VoiceID,
-		}); previewErr == nil {
-			result.PreviewAudioURL = previewURL
-		}
 	}
 
 	voice, err := h.store.CreateVoice(user.ID, VoiceInput{Name: name, Description: description})
@@ -219,12 +197,21 @@ func (h *Handler) CreateClonedVoice(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	previewURL, synthErr := synthesizeIndexTTSPreview(context.Background(), sampleURL, previewText, user.ID, voice.ID)
+	if synthErr != nil {
+		nextVoice, _ := h.store.ApplyVoiceCloneResult(user.ID, voice.ID, VoiceCloneResult{
+			Status:       "failed",
+			ErrorMessage: synthErr.Error(),
+		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": synthErr.Error(), "voice": nextVoice})
+		return
+	}
 	voice, err = h.store.ApplyVoiceCloneResult(user.ID, voice.ID, VoiceCloneResult{
-		ArkTaskID:        result.TaskID,
-		GeneratedVoiceID: result.VoiceID,
-		VoiceType:        result.VoiceType,
-		PreviewAudioURL:  result.PreviewAudioURL,
-		Status:           result.Status,
+		GeneratedVoiceID: "index_tts_" + voice.ID,
+		VoiceType:        sampleURL,
+		PreviewAudioURL:  previewURL,
+		Status:           "ready",
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -271,7 +258,7 @@ func (h *Handler) UploadVoiceSample(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	url, err := saveUpload(c, "sample", filepath.Join("uploads", "voices", user.ID), user.ID, 20*1024*1024, map[string]bool{
+	url, err := saveUpload(c, "sample", filepath.Join("uploads", "voice_samples", user.ID), user.ID, 20*1024*1024, map[string]bool{
 		".wav": true, ".mp3": true, ".m4a": true, ".aac": true, ".ogg": true, ".webm": true,
 	})
 	if err != nil {
@@ -301,26 +288,17 @@ func (h *Handler) CloneVoice(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "sample audio is required"})
 		return
 	}
-	client := h.arkClient
-	if client == nil {
-		client = volc.NewArkClientDefault()
-	}
-	result, err := client.CloneVoice(context.Background(), volc.VoiceCloneParams{
-		Name:           voice.Name,
-		Description:    voice.Description,
-		SampleAudioURL: voice.SampleAudioURL,
-	})
+	previewURL, err := synthesizeIndexTTSPreview(context.Background(), voice.SampleAudioURL, defaultVoicePreviewText, user.ID, voice.ID)
 	if err != nil {
 		nextVoice, _ := h.store.ApplyVoiceCloneResult(user.ID, voice.ID, VoiceCloneResult{Status: "failed", ErrorMessage: err.Error()})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "voice": nextVoice})
 		return
 	}
 	nextVoice, err := h.store.ApplyVoiceCloneResult(user.ID, voice.ID, VoiceCloneResult{
-		ArkTaskID:        result.TaskID,
-		GeneratedVoiceID: result.VoiceID,
-		VoiceType:        result.VoiceType,
-		PreviewAudioURL:  result.PreviewAudioURL,
-		Status:           result.Status,
+		GeneratedVoiceID: "index_tts_" + voice.ID,
+		VoiceType:        voice.SampleAudioURL,
+		PreviewAudioURL:  previewURL,
+		Status:           "ready",
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -345,15 +323,11 @@ func (h *Handler) PreviewVoice(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	client := h.arkClient
-	if client == nil {
-		client = volc.NewArkClientDefault()
+	refAudioURL := strings.TrimSpace(voice.VoiceType)
+	if refAudioURL == "" {
+		refAudioURL = voice.SampleAudioURL
 	}
-	previewURL, err := client.GenerateVoicePreview(context.Background(), volc.VoicePreviewParams{
-		Text:      req.Text,
-		VoiceType: voice.VoiceType,
-		VoiceID:   voice.GeneratedVoiceID,
-	})
+	previewURL, err := synthesizeIndexTTSPreview(context.Background(), refAudioURL, req.Text, user.ID, voice.ID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -367,6 +341,25 @@ func (h *Handler) PreviewVoice(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"voice": nextVoice})
+}
+
+func synthesizeIndexTTSPreview(ctx context.Context, referenceAudioURL, text, userID, voiceID string) (string, error) {
+	if strings.TrimSpace(text) == "" {
+		text = defaultVoicePreviewText
+	}
+	client := indextts.NewClientFromEnv()
+	audio, err := client.Synthesize(ctx, indextts.SynthesisParams{
+		Text:              text,
+		ReferenceAudioURL: referenceAudioURL,
+	})
+	if err != nil {
+		return "", err
+	}
+	outputPath := filepath.Join("resource", "index_tts", "previews", fmt.Sprintf("%s_%s_%d.mp3", userID, voiceID, time.Now().UnixNano()))
+	if err := utils.SaveAudioFile(audio, outputPath); err != nil {
+		return "", err
+	}
+	return utils.ResourceURL(outputPath), nil
 }
 
 func saveUpload(c *gin.Context, field, dir, prefix string, maxSize int64, allowedExt map[string]bool) (string, error) {

@@ -28,6 +28,7 @@ func NewStoryAgent(ctx context.Context) adk.Agent {
 		Description: "An agent that can generate children's illustration story",
 		Instruction: `You are an expert writer that can generate children's illustration story. 
 If feedback is received for the previous version of your story, you need to modify the story according to the feedback.
+Each chapter's body should be sized for about a 10-second narrated video segment: concise, visually actionable, and roughly 35-55 Chinese characters or 1-2 short sentences. Avoid long paragraphs, side explanations, and multiple major scene changes inside one chapter.
 Your response should contain multiple chapters, and must output strictly in the example format, and only contain the story content,不同章节间用##隔开，同章节的标题和内容用#隔开, eg:
 第1章: 一个小苹果#一个小苹果，站在树的枝上，看起来很神秘。##第2章: 苹果的秘密#这个小苹果，它的颜色是黄色的，它的形状是一个圆。
 `,

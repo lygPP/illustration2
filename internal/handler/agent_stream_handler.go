@@ -87,7 +87,7 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 
 	// Create a context that will be canceled if client disconnects
 	ctx, _ := context.WithCancel(c.Request.Context())
-	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	ctx = ill_agent.WithAgentContext(ctx, sessionID, user.ID, h.store)
 
 	// Channel to receive events from the agent
 	eventChan := make(chan *adk.AgentEvent, 100)
@@ -283,7 +283,7 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_secur
 		return
 	}
 
-	ctx := c.Request.Context()
+	ctx := ill_agent.WithAgentContext(c.Request.Context(), req.SessionID, user.ID, h.store)
 
 	// Get session
 	h.sessionsMu.RLock()
