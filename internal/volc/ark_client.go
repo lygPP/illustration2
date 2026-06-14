@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"illustration2/internal/usage"
 	"io"
 	"net/http"
 	"os"
@@ -31,16 +32,20 @@ type ArkClient struct {
 
 func NewArkClientDefault() *ArkClient {
 	apiKey := os.Getenv("ARK_API_KEY")
+	timeoutSeconds := envInt("ARK_HTTP_TIMEOUT_SECONDS", 120)
 	return &ArkClient{
 		BaseURL:    defaultBase,
 		APIKey:     apiKey,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
+		HTTPClient: &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second},
 		Mock:       strings.ToLower(os.Getenv("ARK_MOCK")) == "1" || strings.ToLower(os.Getenv("ARK_MOCK")) == "true",
 	}
 }
 
 func NewArkClientWithTimeout(timeout time.Duration) *ArkClient {
 	apiKey := os.Getenv("ARK_API_KEY")
+	if timeout <= 0 {
+		timeout = time.Duration(envInt("ARK_HTTP_TIMEOUT_SECONDS", 120)) * time.Second
+	}
 	return &ArkClient{
 		BaseURL:    defaultBase,
 		APIKey:     apiKey,
@@ -58,14 +63,21 @@ type ImageGenParams struct {
 	MaxImages                 int
 }
 
+type TokenUsage struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+}
+
 func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]string, error) {
+	if p.Model == "" {
+		p.Model = "doubao-seedream-4.0"
+	}
 	if c.Mock {
 		// 1x1 PNG pixel base64
 		pixel := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+		_ = usage.Record(ctx, p.Model, 0, 0)
 		return []string{"data:image/png;base64," + pixel}, nil
-	}
-	if p.Model == "" {
-		p.Model = "doubao-seedream-4.0"
 	}
 	if p.Size == "" {
 		p.Size = "1024x1024"
@@ -117,6 +129,7 @@ func (c *ArkClient) GenerateImages(ctx context.Context, p ImageGenParams) ([]str
 	if len(urls) == 0 {
 		return nil, errors.New("no images returned")
 	}
+	_ = usage.Record(ctx, p.Model, 0, 0)
 	return urls, nil
 }
 
@@ -159,11 +172,12 @@ type VoicePreviewParams struct {
 }
 
 func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (string, error) {
-	if c.Mock {
-		return "mock-task", nil
-	}
 	if p.Model == "" {
 		p.Model = "doubao-seedance-1-0-lite-i2v"
+	}
+	if c.Mock {
+		_ = usage.Record(ctx, p.Model, 0, 0)
+		return "mock-task", nil
 	}
 	genAudio := true
 	if p.GenerateAudio != nil {
@@ -236,9 +250,11 @@ func (c *ArkClient) CreateVideoTask(ctx context.Context, p VideoTaskParams) (str
 	}
 	fmt.Printf("resp: %+v\n", resp)
 	if id, ok := resp["task_id"].(string); ok && id != "" {
+		_ = usage.Record(ctx, p.Model, 0, 0)
 		return id, nil
 	}
 	if id, ok := resp["id"].(string); ok && id != "" {
+		_ = usage.Record(ctx, p.Model, 0, 0)
 		return id, nil
 	}
 	return "", errors.New("no task id in response")
@@ -729,11 +745,17 @@ func getNumber(m map[string]any, k string) int {
 }
 
 func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string) (string, error) {
+	content, _, err := c.ChatJSONWithUsage(ctx, model, prompt)
+	return content, err
+}
+
+func (c *ArkClient) ChatJSONWithUsage(ctx context.Context, model string, prompt string) (string, TokenUsage, error) {
 	if c.Mock {
-		return "A warm children's book animation shot with consistent character appearance, gentle camera movement, expressive action, soft natural light, no subtitles, no text, no watermark.", nil
+		_ = usage.Record(ctx, model, 0, 0)
+		return "A warm children's book animation shot with consistent character appearance, gentle camera movement, expressive action, soft natural light, no subtitles, no text, no watermark.", TokenUsage{}, nil
 	}
 	if model == "" {
-		return "", errors.New("model required")
+		return "", TokenUsage{}, errors.New("model required")
 	}
 	reqBody := map[string]any{
 		"model":    model,
@@ -748,9 +770,14 @@ func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string) (
 				Content string `json:"content"`
 			} `json:"delta"`
 		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 	if err := c.postJSON(ctx, "/api/v3/chat/completions", reqBody, &resp); err != nil {
-		return "", err
+		return "", TokenUsage{}, err
 	}
 	var content string
 	if len(resp.Choices) > 0 {
@@ -760,7 +787,14 @@ func (c *ArkClient) ChatJSON(ctx context.Context, model string, prompt string) (
 		}
 	}
 	if content == "" {
-		return "", errors.New("empty chat content")
+		return "", TokenUsage{}, errors.New("empty chat content")
 	}
-	return content, nil
+	tokenUsage := TokenUsage{}
+	if resp.Usage != nil && (resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0) {
+		tokenUsage.PromptTokens = resp.Usage.PromptTokens
+		tokenUsage.CompletionTokens = resp.Usage.CompletionTokens
+		tokenUsage.TotalTokens = tokenUsage.PromptTokens + tokenUsage.CompletionTokens
+	}
+	_ = usage.Record(ctx, model, tokenUsage.PromptTokens, tokenUsage.CompletionTokens)
+	return content, tokenUsage, nil
 }

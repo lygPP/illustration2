@@ -93,7 +93,7 @@ func (s *GenerationService) generateVideo(ctx context.Context, req GenerationReq
 	if model == "seedance1.0" {
 		model = "ep-20260107003549-kcrmk"
 	} else if model == "seedance2.0" {
-		model = "ep-20260305130909-qnwqm" // Assuming this mapping, adjust if needed
+		model = "ep-20260608235054-hwn67"
 	}
 
 	params := volc.VideoTaskParams{

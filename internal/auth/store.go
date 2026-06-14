@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"illustration2/internal/model"
 	"log"
 	"os"
 	"path/filepath"
@@ -32,12 +33,13 @@ type Store struct {
 }
 
 type appState struct {
-	Users     map[string]*User                 `json:"users"`
-	Sessions  map[string]*Session              `json:"sessions"`
-	Histories map[string][]GenerationHistory   `json:"histories"`
-	Usage     map[string]map[string]*UsageStat `json:"usage"`
-	Personas  map[string][]Persona             `json:"personas"`
-	Voices    map[string][]VoiceProfile        `json:"voices"`
+	Users      map[string]*User                 `json:"users"`
+	Sessions   map[string]*Session              `json:"sessions"`
+	Histories  map[string][]GenerationHistory   `json:"histories"`
+	Usage      map[string]map[string]*UsageStat `json:"usage"`
+	Personas   map[string][]Persona             `json:"personas"`
+	Voices     map[string][]VoiceProfile        `json:"voices"`
+	AgentWorks map[string]map[string]*AgentWork `json:"agent_works"`
 }
 
 type User struct {
@@ -83,6 +85,75 @@ type GenerationHistory struct {
 	PreviewURL   string    `json:"preview_url,omitempty"`
 	Summary      string    `json:"summary,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+type AgentWork struct {
+	ID                       string                   `json:"id"`
+	SessionID                string                   `json:"session_id"`
+	UserID                   string                   `json:"user_id"`
+	Kind                     string                   `json:"kind"`
+	ResourceType             string                   `json:"resource_type"`
+	ModelName                string                   `json:"model_name"`
+	Theme                    string                   `json:"theme"`
+	Status                   string                   `json:"status"`
+	ErrorMessage             string                   `json:"error_message,omitempty"`
+	State                    string                   `json:"state,omitempty"`
+	Story                    *model.Story             `json:"story,omitempty"`
+	Characters               []model.CharacterProfile `json:"characters,omitempty"`
+	ImagePrompts             []model.ImagePrompt      `json:"image_prompts,omitempty"`
+	GeneratedImages          map[int][]string         `json:"generated_images,omitempty"`
+	ConfirmedImages          map[int][]string         `json:"confirmed_images,omitempty"`
+	CurrentImageChapter      int                      `json:"current_image_chapter,omitempty"`
+	VideoPrompt              string                   `json:"video_prompt,omitempty"`
+	ChapterVideoPrompts      []model.VideoPrompt      `json:"chapter_video_prompts,omitempty"`
+	ChapterVideoURLs         map[int]string           `json:"chapter_video_urls,omitempty"`
+	ChapterAudioURLs         map[int]string           `json:"chapter_audio_urls,omitempty"`
+	NarratedChapterVideoURLs map[int]string           `json:"narrated_chapter_video_urls,omitempty"`
+	VideoURL                 string                   `json:"video_url,omitempty"`
+	SelectedVoiceID          string                   `json:"selected_voice_id,omitempty"`
+	SelectedVoiceType        string                   `json:"selected_voice_type,omitempty"`
+	SelectedVoiceName        string                   `json:"selected_voice_name,omitempty"`
+	PreviewURL               string                   `json:"preview_url,omitempty"`
+	Summary                  string                   `json:"summary,omitempty"`
+	CreatedAt                time.Time                `json:"created_at"`
+	UpdatedAt                time.Time                `json:"updated_at"`
+}
+
+type AgentWorkSnapshot struct {
+	State                    string
+	Story                    *model.Story
+	Characters               []model.CharacterProfile
+	ImagePrompts             []model.ImagePrompt
+	GeneratedImages          map[int][]string
+	ConfirmedImages          map[int][]string
+	CurrentImageChapter      int
+	VideoPrompt              string
+	ChapterVideoPrompts      []model.VideoPrompt
+	ChapterVideoURLs         map[int]string
+	ChapterAudioURLs         map[int]string
+	NarratedChapterVideoURLs map[int]string
+	VideoURL                 string
+	SelectedVoiceID          string
+	SelectedVoiceType        string
+	SelectedVoiceName        string
+}
+
+type HistoryItem struct {
+	ItemType     string    `json:"item_type"`
+	ID           string    `json:"id"`
+	SessionID    string    `json:"session_id,omitempty"`
+	UserID       string    `json:"user_id"`
+	Kind         string    `json:"kind"`
+	ResourceType string    `json:"resource_type,omitempty"`
+	ModelName    string    `json:"model_name"`
+	Prompt       string    `json:"prompt"`
+	Theme        string    `json:"theme,omitempty"`
+	Status       string    `json:"status"`
+	TaskID       string    `json:"task_id,omitempty"`
+	PreviewURL   string    `json:"preview_url,omitempty"`
+	Summary      string    `json:"summary,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 }
 
 type UsageStat struct {
@@ -138,12 +209,13 @@ func NewStore(path string) (*Store, error) {
 
 func newAppState() appState {
 	return appState{
-		Users:     make(map[string]*User),
-		Sessions:  make(map[string]*Session),
-		Histories: make(map[string][]GenerationHistory),
-		Usage:     make(map[string]map[string]*UsageStat),
-		Personas:  make(map[string][]Persona),
-		Voices:    make(map[string][]VoiceProfile),
+		Users:      make(map[string]*User),
+		Sessions:   make(map[string]*Session),
+		Histories:  make(map[string][]GenerationHistory),
+		Usage:      make(map[string]map[string]*UsageStat),
+		Personas:   make(map[string][]Persona),
+		Voices:     make(map[string][]VoiceProfile),
+		AgentWorks: make(map[string]map[string]*AgentWork),
 	}
 }
 
@@ -366,6 +438,167 @@ func (s *Store) ListHistory(userID string) []GenerationHistory {
 	return history
 }
 
+func (s *Store) CreateAgentWork(userID, sessionID, theme string) (*AgentWork, error) {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	theme = strings.TrimSpace(theme)
+	if userID == "" {
+		return nil, errors.New("user id required")
+	}
+	if sessionID == "" {
+		return nil, errors.New("session id required")
+	}
+	if theme == "" {
+		theme = "未命名插画任务"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state.AgentWorks == nil {
+		s.state.AgentWorks = make(map[string]map[string]*AgentWork)
+	}
+	if s.state.AgentWorks[userID] == nil {
+		s.state.AgentWorks[userID] = make(map[string]*AgentWork)
+	}
+	if _, exists := s.state.AgentWorks[userID][sessionID]; exists {
+		return nil, errors.New("agent work session already exists")
+	}
+	now := time.Now()
+	work := &AgentWork{
+		ID:           sessionID,
+		SessionID:    sessionID,
+		UserID:       userID,
+		Kind:         "agent_work",
+		ResourceType: "illustration_agent",
+		ModelName:    "illustration-agent",
+		Theme:        theme,
+		Status:       "processing",
+		Summary:      "插画 Agent 任务已开始",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	s.state.AgentWorks[userID][sessionID] = work
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
+	return cloneAgentWork(work), nil
+}
+
+func (s *Store) UpdateAgentWorkSnapshot(userID, sessionID, status, errorMessage string, snapshot AgentWorkSnapshot) error {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	work := s.state.AgentWorks[userID][sessionID]
+	if work == nil {
+		return nil
+	}
+	if strings.TrimSpace(status) != "" {
+		work.Status = strings.TrimSpace(status)
+	}
+	if errorMessage != "" {
+		work.ErrorMessage = errorMessage
+	}
+	applyAgentWorkSnapshot(work, snapshot)
+	work.PreviewURL = agentWorkPreviewURL(work)
+	work.Summary = agentWorkSummary(work)
+	work.UpdatedAt = time.Now()
+	return s.saveLocked()
+}
+
+func (s *Store) GetAgentWork(userID, sessionID string) (*AgentWork, error) {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return nil, errors.New("user id and session id required")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	work := s.state.AgentWorks[userID][sessionID]
+	if work == nil {
+		return nil, errors.New("agent work not found")
+	}
+	return cloneAgentWork(work), nil
+}
+
+func (s *Store) ListAgentWorks(userID string) []AgentWork {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	worksBySession := s.state.AgentWorks[userID]
+	works := make([]AgentWork, 0, len(worksBySession))
+	for _, work := range worksBySession {
+		if work != nil {
+			works = append(works, *cloneAgentWork(work))
+		}
+	}
+	sort.SliceStable(works, func(i, j int) bool {
+		return works[i].UpdatedAt.After(works[j].UpdatedAt)
+	})
+	return works
+}
+
+func (s *Store) ListMergedHistory(userID string) []HistoryItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]HistoryItem, 0, len(s.state.Histories[userID])+len(s.state.AgentWorks[userID]))
+	for _, h := range s.state.Histories[userID] {
+		if (h.Kind == "agent_stream" || h.Kind == "agent_resume") && s.state.AgentWorks[userID][h.TaskID] != nil {
+			continue
+		}
+		items = append(items, HistoryItem{
+			ItemType:     "history",
+			ID:           h.ID,
+			UserID:       h.UserID,
+			Kind:         h.Kind,
+			ResourceType: h.ResourceType,
+			ModelName:    h.ModelName,
+			Prompt:       h.Prompt,
+			Status:       h.Status,
+			TaskID:       h.TaskID,
+			PreviewURL:   h.PreviewURL,
+			Summary:      h.Summary,
+			CreatedAt:    h.CreatedAt,
+			UpdatedAt:    h.CreatedAt,
+		})
+	}
+	for _, work := range s.state.AgentWorks[userID] {
+		if work == nil {
+			continue
+		}
+		items = append(items, HistoryItem{
+			ItemType:     "agent_work",
+			ID:           work.ID,
+			SessionID:    work.SessionID,
+			UserID:       work.UserID,
+			Kind:         work.Kind,
+			ResourceType: work.ResourceType,
+			ModelName:    work.ModelName,
+			Prompt:       work.Theme,
+			Theme:        work.Theme,
+			Status:       work.Status,
+			TaskID:       work.SessionID,
+			PreviewURL:   work.PreviewURL,
+			Summary:      work.Summary,
+			CreatedAt:    work.CreatedAt,
+			UpdatedAt:    work.UpdatedAt,
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+	return items
+}
+
 func (s *Store) UserOwnsTask(userID, taskID string) bool {
 	if userID == "" || taskID == "" {
 		return false
@@ -431,6 +664,160 @@ func (s *Store) ListUsage(userID string) []UsageStat {
 	return stats
 }
 
+func applyAgentWorkSnapshot(work *AgentWork, snapshot AgentWorkSnapshot) {
+	if strings.TrimSpace(snapshot.State) != "" {
+		work.State = strings.TrimSpace(snapshot.State)
+	}
+	if snapshot.Story != nil {
+		story := *snapshot.Story
+		story.Chapters = append([]model.StoryChapter(nil), snapshot.Story.Chapters...)
+		work.Story = &story
+		if strings.TrimSpace(work.Theme) == "" {
+			work.Theme = strings.TrimSpace(story.Theme)
+		}
+	}
+	if snapshot.Characters != nil {
+		work.Characters = cloneCharacters(snapshot.Characters)
+	}
+	if snapshot.ImagePrompts != nil {
+		work.ImagePrompts = append([]model.ImagePrompt(nil), snapshot.ImagePrompts...)
+	}
+	if snapshot.GeneratedImages != nil {
+		work.GeneratedImages = cloneStringSliceMap(snapshot.GeneratedImages)
+	}
+	if snapshot.ConfirmedImages != nil {
+		work.ConfirmedImages = cloneStringSliceMap(snapshot.ConfirmedImages)
+	}
+	if snapshot.CurrentImageChapter >= 0 {
+		work.CurrentImageChapter = snapshot.CurrentImageChapter
+	}
+	if snapshot.VideoPrompt != "" {
+		work.VideoPrompt = snapshot.VideoPrompt
+	}
+	if snapshot.ChapterVideoPrompts != nil {
+		work.ChapterVideoPrompts = append([]model.VideoPrompt(nil), snapshot.ChapterVideoPrompts...)
+	}
+	if snapshot.ChapterVideoURLs != nil {
+		work.ChapterVideoURLs = cloneStringMap(snapshot.ChapterVideoURLs)
+	}
+	if snapshot.ChapterAudioURLs != nil {
+		work.ChapterAudioURLs = cloneStringMap(snapshot.ChapterAudioURLs)
+	}
+	if snapshot.NarratedChapterVideoURLs != nil {
+		work.NarratedChapterVideoURLs = cloneStringMap(snapshot.NarratedChapterVideoURLs)
+	}
+	if snapshot.VideoURL != "" {
+		work.VideoURL = snapshot.VideoURL
+	}
+	if snapshot.SelectedVoiceID != "" {
+		work.SelectedVoiceID = snapshot.SelectedVoiceID
+	}
+	if snapshot.SelectedVoiceType != "" {
+		work.SelectedVoiceType = snapshot.SelectedVoiceType
+	}
+	if snapshot.SelectedVoiceName != "" {
+		work.SelectedVoiceName = snapshot.SelectedVoiceName
+	}
+}
+
+func agentWorkPreviewURL(work *AgentWork) string {
+	if work == nil {
+		return ""
+	}
+	if work.VideoURL != "" {
+		return work.VideoURL
+	}
+	for _, url := range work.NarratedChapterVideoURLs {
+		if url != "" {
+			return url
+		}
+	}
+	for _, urls := range work.ConfirmedImages {
+		if len(urls) > 0 && urls[0] != "" {
+			return urls[0]
+		}
+	}
+	for _, character := range work.Characters {
+		if len(character.ReferenceImageURLs) > 0 && character.ReferenceImageURLs[0] != "" {
+			return character.ReferenceImageURLs[0]
+		}
+	}
+	return ""
+}
+
+func agentWorkSummary(work *AgentWork) string {
+	if work == nil {
+		return ""
+	}
+	if work.ErrorMessage != "" {
+		return work.ErrorMessage
+	}
+	if work.VideoURL != "" {
+		return "完整插画视频已生成"
+	}
+	if work.Story != nil && len(work.Story.Chapters) > 0 {
+		return fmt.Sprintf("已生成 %d 个故事章节", len(work.Story.Chapters))
+	}
+	return "插画 Agent 任务进行中"
+}
+
+func cloneAgentWork(work *AgentWork) *AgentWork {
+	if work == nil {
+		return nil
+	}
+	clone := *work
+	if work.Story != nil {
+		story := *work.Story
+		story.Chapters = append([]model.StoryChapter(nil), work.Story.Chapters...)
+		clone.Story = &story
+	}
+	clone.Characters = cloneCharacters(work.Characters)
+	clone.ImagePrompts = append([]model.ImagePrompt(nil), work.ImagePrompts...)
+	clone.GeneratedImages = cloneStringSliceMap(work.GeneratedImages)
+	clone.ConfirmedImages = cloneStringSliceMap(work.ConfirmedImages)
+	clone.ChapterVideoPrompts = append([]model.VideoPrompt(nil), work.ChapterVideoPrompts...)
+	clone.ChapterVideoURLs = cloneStringMap(work.ChapterVideoURLs)
+	clone.ChapterAudioURLs = cloneStringMap(work.ChapterAudioURLs)
+	clone.NarratedChapterVideoURLs = cloneStringMap(work.NarratedChapterVideoURLs)
+	return &clone
+}
+
+func cloneCharacters(characters []model.CharacterProfile) []model.CharacterProfile {
+	if characters == nil {
+		return nil
+	}
+	clones := make([]model.CharacterProfile, len(characters))
+	for i, character := range characters {
+		clones[i] = character
+		clones[i].Aliases = append([]string(nil), character.Aliases...)
+		clones[i].ChapterIndices = append([]int(nil), character.ChapterIndices...)
+		clones[i].ReferenceImageURLs = append([]string(nil), character.ReferenceImageURLs...)
+	}
+	return clones
+}
+
+func cloneStringSliceMap(src map[int][]string) map[int][]string {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[int][]string, len(src))
+	for key, values := range src {
+		dst[key] = append([]string(nil), values...)
+	}
+	return dst
+}
+
+func cloneStringMap(src map[int]string) map[int]string {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[int]string, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
 func (u *User) Public() *PublicUser {
 	return &PublicUser{
 		ID:        u.ID,
@@ -493,6 +880,9 @@ func (s *Store) ensureState() {
 	}
 	if s.state.Voices == nil {
 		s.state.Voices = make(map[string][]VoiceProfile)
+	}
+	if s.state.AgentWorks == nil {
+		s.state.AgentWorks = make(map[string]map[string]*AgentWork)
 	}
 	for _, user := range s.state.Users {
 		normalizeUser(user)

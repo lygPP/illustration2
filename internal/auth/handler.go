@@ -144,7 +144,21 @@ func (h *Handler) History(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"history": h.store.ListHistory(user.ID)})
+	c.JSON(http.StatusOK, gin.H{"history": h.store.ListMergedHistory(user.ID)})
+}
+
+func (h *Handler) AgentWork(c *gin.Context) {
+	user, ok := CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	work, err := h.store.GetAgentWork(user.ID, c.Param("session_id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"work": work})
 }
 
 func (h *Handler) Usage(c *gin.Context) {

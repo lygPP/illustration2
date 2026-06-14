@@ -32,6 +32,12 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 	go func() {
 		defer gen.Close()
 
+		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageStory) {
+			gen.Send(&adk.AgentEvent{Action: adk.NewBreakLoopAction(r.AgentName)})
+			return
+		}
+
 		contentToReview, ok := adk.GetSessionValue(ctx, "story_content_to_review")
 		// log.Printf("story_content_to_review: %v\n", contentToReview)
 		if !ok {
@@ -61,7 +67,6 @@ func (r StoryReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 				Content: content,
 			})
 		}
-		sessionState := GetSessionState(ctx)
 		sessionState.Story.Chapters = storyChapters
 		sessionState.State = "story_review"
 		SaveSessionState(ctx, sessionState)

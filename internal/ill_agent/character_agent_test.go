@@ -1,8 +1,15 @@
 package ill_agent
 
 import (
+	"context"
+	"illustration2/internal/auth"
 	"illustration2/internal/model"
+	"illustration2/internal/volc"
+	"path/filepath"
 	"testing"
+
+	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/schema"
 )
 
 func TestParseCharacterProfilesNormalizesChapters(t *testing.T) {
@@ -71,5 +78,45 @@ func TestMockCharacters(t *testing.T) {
 	}
 	if len(characters[0].ChapterIndices) != 2 {
 		t.Fatalf("mock character chapter indices = %+v", characters[0].ChapterIndices)
+	}
+}
+
+func TestStoryGenerateAgentRecordsModelUsage(t *testing.T) {
+	store, err := auth.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	user, _, err := store.Register("story-user", "secret123")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	ctx := WithAgentContext(context.Background(), "story-usage-test", user.ID, store)
+	agent := &StoryGenerateAgent{
+		AgentName: "故事生成助手",
+		AgentDesc: storyGenerateInstruction,
+		ModelName: storyModelName,
+		ArkClient: &volc.ArkClient{Mock: true},
+	}
+
+	iter := agent.Run(ctx, &adk.AgentInput{Messages: []adk.Message{schema.UserMessage("森林冒险")}})
+	event, ok := iter.Next()
+	if !ok {
+		t.Fatal("story agent produced no event")
+	}
+	if event.Err != nil {
+		t.Fatalf("story agent error = %v", event.Err)
+	}
+
+	stats := store.ListUsage(user.ID)
+	byModel := make(map[string]auth.UsageStat, len(stats))
+	for _, stat := range stats {
+		byModel[stat.ModelName] = stat
+	}
+	if byModel[storyModelName].RequestCount != 1 {
+		t.Fatalf("story model usage = %+v", byModel[storyModelName])
+	}
+	if _, ok := byModel["illustration-agent"]; ok {
+		t.Fatalf("unexpected illustration-agent usage = %+v", byModel["illustration-agent"])
 	}
 }

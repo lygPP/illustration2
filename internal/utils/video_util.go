@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -228,7 +229,8 @@ func downloadVideo(ctx context.Context, url, localPath string) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: time.Duration(envInt("VIDEO_DOWNLOAD_TIMEOUT_SECONDS", 900)) * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -250,4 +252,16 @@ func downloadVideo(ctx context.Context, url, localPath string) error {
 	}
 
 	return nil
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

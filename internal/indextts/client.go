@@ -35,7 +35,7 @@ type SynthesisParams struct {
 }
 
 func NewClientFromEnv() *Client {
-	timeoutSeconds := envInt("INDEX_TTS_TIMEOUT_SECONDS", 300)
+	timeoutSeconds := envInt("INDEX_TTS_TIMEOUT_SECONDS", 1200)
 	path := firstNonEmpty(os.Getenv("INDEX_TTS_SYNTHESIS_PATH"), "/tts")
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

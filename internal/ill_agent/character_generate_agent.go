@@ -88,6 +88,10 @@ func (r CharacterGenerateAgent) Run(ctx context.Context, input *adk.AgentInput, 
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageCharacter) {
+			gen.Send(StageSkippedEvent(r.AgentName))
+			return
+		}
 		if sessionState.Story == nil || len(sessionState.Story.Chapters) == 0 {
 			gen.Send(&adk.AgentEvent{Err: errors.New("story is empty, cannot generate characters")})
 			return
@@ -149,7 +153,7 @@ func (r CharacterGenerateAgent) generateCharacters(ctx context.Context, sessionS
 		formatStoryChapters(sessionState.Story),
 		strings.TrimSpace(sessionState.CharacterFeedback),
 	)
-	content, err := r.ArkClient.ChatJSON(ctx, r.ModelName, prompt)
+	content, _, err := r.ArkClient.ChatJSONWithUsage(ctx, r.ModelName, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("character generation failed: %w", err)
 	}

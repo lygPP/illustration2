@@ -26,7 +26,7 @@ func NewVideoGenerateAgent(ctx context.Context) adk.Agent {
 		AgentName: "视频生成助手",
 		AgentDesc: "一个可以根据生成的图片创建视频的agent",
 		ModelName: "ep-20260107003549-kcrmk",
-		ArkClient: volc.NewArkClientWithTimeout(300 * time.Second), // 视频生成可能需要更长时间
+		ArkClient: volc.NewArkClientWithTimeout(time.Duration(envInt("AGENT_VIDEO_HTTP_TIMEOUT_SECONDS", 1800)) * time.Second), // 视频生成可能需要更长时间
 	}
 	return a
 }
@@ -105,7 +105,7 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		// 轮询视频任务状态
 		var status string
 		var videoURL string
-		maxAttempts := 60 // 最多轮询60次
+		maxAttempts := envInt("AGENT_VIDEO_POLL_MAX_ATTEMPTS", 360)
 		attempts := 0
 
 		for attempts < maxAttempts {
@@ -131,8 +131,16 @@ func (r VideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 				return
 			}
 
-			// 等待5秒后再次轮询
-			time.Sleep(5 * time.Second)
+			// 等待后再次轮询
+			select {
+			case <-ctx.Done():
+				event := &adk.AgentEvent{
+					Err: fmt.Errorf("video generation canceled: %w", ctx.Err()),
+				}
+				gen.Send(event)
+				return
+			case <-time.After(time.Duration(envInt("AGENT_VIDEO_POLL_INTERVAL_SECONDS", 5)) * time.Second):
+			}
 			attempts++
 		}
 

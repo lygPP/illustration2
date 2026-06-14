@@ -38,6 +38,10 @@ func (r CharacterReviewAgent) Run(ctx context.Context, input *adk.AgentInput, op
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageCharacter) {
+			gen.Send(&adk.AgentEvent{Action: adk.NewBreakLoopAction(r.AgentName)})
+			return
+		}
 		if len(sessionState.Characters) == 0 {
 			gen.Send(&adk.AgentEvent{Err: errors.New("characters not found in session")})
 			return

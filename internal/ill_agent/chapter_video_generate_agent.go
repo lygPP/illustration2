@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"illustration2/internal/indextts"
+	"illustration2/internal/usage"
 	"illustration2/internal/utils"
 	"illustration2/internal/volc"
 	"log"
@@ -40,8 +41,8 @@ func NewChapterVideoGenerateAgent(ctx context.Context) adk.Agent {
 	a := ChapterVideoGenerateAgent{
 		AgentName: "章节视频生成助手",
 		AgentDesc: "一个可以基于全局角色参考图并发生成章节视频的agent",
-		ModelName: "ep-20260305130909-qnwqm",
-		ArkClient: volc.NewArkClientWithTimeout(300 * time.Second),
+		ModelName: "ep-20260608235054-hwn67",
+		ArkClient: volc.NewArkClientWithTimeout(time.Duration(envInt("AGENT_VIDEO_HTTP_TIMEOUT_SECONDS", 1800)) * time.Second),
 	}
 	return a
 }
@@ -256,7 +257,7 @@ func (r ChapterVideoGenerateAgent) generateChapterVideo(ctx context.Context, vid
 
 	var status string
 	var videoURL string
-	maxAttempts := 120
+	maxAttempts := envInt("AGENT_VIDEO_POLL_MAX_ATTEMPTS", 360)
 	attempts := 0
 	for attempts < maxAttempts {
 		status, videoURL, err = r.ArkClient.GetVideoTask(ctx, taskID)
@@ -269,7 +270,11 @@ func (r ChapterVideoGenerateAgent) generateChapterVideo(ctx context.Context, vid
 		if status == "failed" {
 			return "", fmt.Errorf("video generation failed for chapter %d", chapterIdx+1)
 		}
-		time.Sleep(5 * time.Second)
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("video generation canceled for chapter %d: %w", chapterIdx+1, ctx.Err())
+		case <-time.After(time.Duration(envInt("AGENT_VIDEO_POLL_INTERVAL_SECONDS", 5)) * time.Second):
+		}
 		attempts++
 	}
 
@@ -292,6 +297,7 @@ func (r ChapterVideoGenerateAgent) synthesizeChapterNarration(ctx context.Contex
 	if err := utils.SaveAudioFile(audio, audioPath); err != nil {
 		return "", "", fmt.Errorf("save narration failed for chapter %d: %w", chapterIdx+1, err)
 	}
+	_ = usage.Record(ctx, "index-tts", 0, 0)
 	return utils.ResourceURL(audioPath), audioPath, nil
 }
 

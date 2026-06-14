@@ -82,7 +82,7 @@ func (r ChapterVideoPromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 				characterDesc,
 			)
 
-			content, err := r.ArkClient.ChatJSON(ctx, r.ModelName, prompt)
+			content, _, err := r.ArkClient.ChatJSONWithUsage(ctx, r.ModelName, prompt)
 			if err != nil {
 				gen.Send(&adk.AgentEvent{Err: errors.New("chapter video prompt generation failed")})
 				return

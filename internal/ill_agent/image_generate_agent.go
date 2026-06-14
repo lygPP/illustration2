@@ -46,6 +46,10 @@ func (r ImageGenerateAgent) Run(ctx context.Context, input *adk.AgentInput,
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageImage) {
+			gen.Send(StageSkippedEvent(r.AgentName))
+			return
+		}
 		if sessionState.Story == nil || len(sessionState.Story.Chapters) == 0 {
 			gen.Send(&adk.AgentEvent{Err: errors.New("story is empty, cannot generate first frame image")})
 			return

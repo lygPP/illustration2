@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"illustration2/internal/model"
 	"path/filepath"
 	"testing"
 )
@@ -126,5 +127,93 @@ func TestPersonaAndVoiceLifecycle(t *testing.T) {
 	}
 	if voice.Status != "ready" || voice.VoiceType == "" {
 		t.Fatalf("voice status/type = %s/%s", voice.Status, voice.VoiceType)
+	}
+}
+
+func TestUsageStatsAggregateByModel(t *testing.T) {
+	store := newTestStore(t)
+	user, _, err := store.Register("usage-user", "secret123")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if err := store.AddUsage(user.ID, "chat-model", 10, 4); err != nil {
+		t.Fatalf("AddUsage(chat 1) error = %v", err)
+	}
+	if err := store.AddUsage(user.ID, "chat-model", 2, 1); err != nil {
+		t.Fatalf("AddUsage(chat 2) error = %v", err)
+	}
+	if err := store.AddUsage(user.ID, "image-model", 0, 0); err != nil {
+		t.Fatalf("AddUsage(image) error = %v", err)
+	}
+
+	stats := store.ListUsage(user.ID)
+	byModel := make(map[string]UsageStat, len(stats))
+	for _, stat := range stats {
+		byModel[stat.ModelName] = stat
+	}
+
+	chat := byModel["chat-model"]
+	if chat.RequestCount != 2 || chat.PromptTokens != 12 || chat.CompletionTokens != 5 || chat.TotalTokens != 17 {
+		t.Fatalf("chat usage = %+v", chat)
+	}
+	image := byModel["image-model"]
+	if image.RequestCount != 1 || image.TotalTokens != 0 {
+		t.Fatalf("image usage = %+v", image)
+	}
+}
+
+func TestAgentWorkLifecycleAndMergedHistory(t *testing.T) {
+	store := newTestStore(t)
+	user, _, err := store.Register("agent-user", "secret123")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	other, _, err := store.Register("other-user", "secret123")
+	if err != nil {
+		t.Fatalf("Register(other) error = %v", err)
+	}
+
+	if _, err := store.CreateAgentWork(user.ID, "session-1", "森林冒险"); err != nil {
+		t.Fatalf("CreateAgentWork() error = %v", err)
+	}
+	if _, err := store.CreateAgentWork(user.ID, "session-1", "重复任务"); err == nil {
+		t.Fatal("CreateAgentWork() expected duplicate error")
+	}
+	if err := store.UpdateAgentWorkSnapshot(user.ID, "session-1", "succeeded", "", AgentWorkSnapshot{
+		Story: &model.Story{
+			Theme: "森林冒险",
+			Chapters: []model.StoryChapter{
+				{Title: "第一章", Content: "小鹿出发。"},
+			},
+		},
+		Characters: []model.CharacterProfile{
+			{ID: "hero", Name: "小鹿", Description: "勇敢的小鹿", ReferenceImageURLs: []string{"/resource/hero.png"}},
+		},
+		ConfirmedImages:          map[int][]string{0: []string{"/resource/chapter.png"}},
+		ChapterAudioURLs:         map[int]string{0: "/resource/chapter.mp3"},
+		NarratedChapterVideoURLs: map[int]string{0: "/resource/chapter.mp4"},
+		VideoURL:                 "/resource/final.mp4",
+	}); err != nil {
+		t.Fatalf("UpdateAgentWorkSnapshot() error = %v", err)
+	}
+
+	work, err := store.GetAgentWork(user.ID, "session-1")
+	if err != nil {
+		t.Fatalf("GetAgentWork() error = %v", err)
+	}
+	if work.Status != "succeeded" || work.VideoURL == "" || work.PreviewURL != "/resource/final.mp4" {
+		t.Fatalf("work = %+v", work)
+	}
+	if _, err := store.GetAgentWork(other.ID, "session-1"); err == nil {
+		t.Fatal("GetAgentWork(other) expected not found")
+	}
+
+	items := store.ListMergedHistory(user.ID)
+	if len(items) != 1 {
+		t.Fatalf("merged history length = %d", len(items))
+	}
+	if items[0].ItemType != "agent_work" || items[0].SessionID != "session-1" || items[0].Prompt != "森林冒险" {
+		t.Fatalf("merged item = %+v", items[0])
 	}
 }

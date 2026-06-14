@@ -38,6 +38,10 @@ func (r ImageReviewAgent) Run(ctx context.Context, input *adk.AgentInput,
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageImage) {
+			gen.Send(&adk.AgentEvent{Action: adk.NewBreakLoopAction(r.AgentName)})
+			return
+		}
 		if sessionState.GeneratedImages == nil {
 			event := &adk.AgentEvent{
 				Err: errors.New("generated_images not found in session"),

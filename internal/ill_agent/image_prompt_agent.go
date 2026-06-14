@@ -60,6 +60,10 @@ func (r ImagePromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 		defer gen.Close()
 
 		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageImage) {
+			gen.Send(StageSkippedEvent(r.AgentName))
+			return
+		}
 		imagePrompts := make([]model.ImagePrompt, 0)
 		for i, chapter := range sessionState.Story.Chapters {
 			sceneDesc := fmt.Sprintf("Chapter %d: %s. %s", i+1, strings.TrimSpace(chapter.Title), strings.TrimSpace(chapter.Content))
@@ -71,7 +75,7 @@ func (r ImagePromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 				sceneDesc,
 				characterDesc,
 			)
-			content, err := r.ArkClient.ChatJSON(ctx, r.ModelName, prompt)
+			content, _, err := r.ArkClient.ChatJSONWithUsage(ctx, r.ModelName, prompt)
 			if err != nil {
 				event := &adk.AgentEvent{
 					Err: errors.New("image prompt generation failed"),
@@ -86,7 +90,11 @@ func (r ImagePromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 		}
 		log.Printf("imagePrompts: %+v\n", imagePrompts)
 		sessionState.ImagePrompts = imagePrompts
-		sessionState.CurrentImageChapter = 0
+		if NormalizeRestartStage(sessionState.StartFromStage) == StageImage && sessionState.StartFromChapter >= 0 {
+			sessionState.CurrentImageChapter = sessionState.StartFromChapter
+		} else {
+			sessionState.CurrentImageChapter = 0
+		}
 		sessionState.ImageFeedback = ""
 		sessionState.NeedToEditImages = false
 		if sessionState.GeneratedImages == nil {

@@ -39,6 +39,12 @@ func (r VoiceSelectionAgent) Run(ctx context.Context, input *adk.AgentInput,
 	go func() {
 		defer gen.Close()
 
+		sessionState := GetSessionState(ctx)
+		if ShouldSkipStage(sessionState, StageVoiceSelection) {
+			gen.Send(StageSkippedEvent(r.AgentName))
+			return
+		}
+
 		voices, err := availableVoices(ctx)
 		if err != nil {
 			gen.Send(&adk.AgentEvent{Err: err})
@@ -49,7 +55,6 @@ func (r VoiceSelectionAgent) Run(ctx context.Context, input *adk.AgentInput,
 			return
 		}
 
-		sessionState := GetSessionState(ctx)
 		sessionState.State = "voice_selection"
 		SaveSessionState(ctx, sessionState)
 
@@ -82,15 +87,14 @@ func (r VoiceSelectionAgent) Resume(ctx context.Context, info *adk.ResumeInfo,
 			return
 		}
 		voice, ok := matchVoiceChoice(voices, choice)
+		sessionState := GetSessionState(ctx)
 		if !ok {
-			sessionState := GetSessionState(ctx)
 			sessionState.State = "voice_selection"
 			SaveSessionState(ctx, sessionState)
 			gen.Send(adk.StatefulInterrupt(ctx, voiceSelectionInfo(voices, "未找到匹配音色，请回复序号、音色ID或音色名称。"), sessionState.State))
 			return
 		}
 
-		sessionState := GetSessionState(ctx)
 		sessionState.SelectedVoiceID = voice.ID
 		sessionState.SelectedVoiceType = localVoiceReference(voice)
 		sessionState.SelectedVoiceName = voice.Name

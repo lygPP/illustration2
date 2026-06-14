@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"illustration2/internal/auth"
 	"illustration2/internal/model"
+	"illustration2/internal/usage"
 	"log"
 	"sync"
 
@@ -36,6 +37,10 @@ type IllustrationSessionState struct {
 	NeedToEditImage          bool                     `json:"need_to_edit_image,omitempty"`      // 是否需要编辑图片
 	ImageFeedback            string                   `json:"image_feedback,omitempty"`          // 图片反馈
 	NeedToEditImages         bool                     `json:"need_to_edit_images,omitempty"`     // 是否需要编辑图片
+	StartFromStage           string                   `json:"start_from_stage,omitempty"`        // 历史恢复/重新执行时的起点阶段
+	StartFromChapter         int                      `json:"start_from_chapter,omitempty"`      // 图片阶段从第几章开始，-1 表示自动判断
+	RestartFeedback          string                   `json:"restart_feedback,omitempty"`        // 触发重新执行的人工反馈
+	RestartReason            string                   `json:"restart_reason,omitempty"`          // 起点判断原因
 }
 
 var sessions map[string]*IllustrationSessionState = make(map[string]*IllustrationSessionState) // 会话状态管理
@@ -67,6 +72,7 @@ func GetSessionState(ctx context.Context) *IllustrationSessionState {
 			ChapterVideoURLs:         make(map[int]string),
 			ChapterAudioURLs:         make(map[int]string),
 			NarratedChapterVideoURLs: make(map[int]string),
+			StartFromChapter:         -1,
 		}
 	}
 
@@ -75,9 +81,43 @@ func GetSessionState(ctx context.Context) *IllustrationSessionState {
 
 func SaveSessionState(ctx context.Context, state *IllustrationSessionState) {
 	sessionMu.Lock()
-	defer sessionMu.Unlock()
-
 	sessions[GetSessionID(ctx)] = state
+	sessionMu.Unlock()
+
+	SyncAgentWork(ctx, "processing", "")
+}
+
+func SyncAgentWork(ctx context.Context, status, errorMessage string) {
+	store := GetAgentStore(ctx)
+	userID := GetAgentUserID(ctx)
+	sessionID := GetSessionID(ctx)
+	if store == nil || userID == "" || sessionID == "" || sessionID == "unknow" {
+		return
+	}
+	sessionMu.RLock()
+	state, exists := sessions[sessionID]
+	sessionMu.RUnlock()
+	if !exists || state == nil {
+		return
+	}
+	_ = store.UpdateAgentWorkSnapshot(userID, sessionID, status, errorMessage, auth.AgentWorkSnapshot{
+		State:                    state.State,
+		Story:                    state.Story,
+		Characters:               state.Characters,
+		ImagePrompts:             state.ImagePrompts,
+		GeneratedImages:          state.GeneratedImages,
+		ConfirmedImages:          state.ConfirmedImages,
+		CurrentImageChapter:      state.CurrentImageChapter,
+		VideoPrompt:              state.VideoPrompt,
+		ChapterVideoPrompts:      state.ChapterVideoPrompts,
+		ChapterVideoURLs:         state.ChapterVideoURLs,
+		ChapterAudioURLs:         state.ChapterAudioURLs,
+		NarratedChapterVideoURLs: state.NarratedChapterVideoURLs,
+		VideoURL:                 state.VideoURL,
+		SelectedVoiceID:          state.SelectedVoiceID,
+		SelectedVoiceType:        state.SelectedVoiceType,
+		SelectedVoiceName:        state.SelectedVoiceName,
+	})
 }
 
 type agentContextKey string
@@ -91,6 +131,7 @@ func WithAgentContext(ctx context.Context, sessionID, userID string, store *auth
 	ctx = context.WithValue(ctx, "sessionID", sessionID)
 	ctx = context.WithValue(ctx, agentUserIDKey, userID)
 	ctx = context.WithValue(ctx, agentStoreKey, store)
+	ctx = usage.WithContext(ctx, userID, store)
 	return ctx
 }
 

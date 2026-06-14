@@ -77,7 +77,7 @@ func (r VideoPromptAgent) Run(ctx context.Context, input *adk.AgentInput,
 			strings.Join(chaptersText, "\n"),
 		)
 
-		content, err := r.ArkClient.ChatJSON(ctx, r.ModelName, prompt)
+		content, _, err := r.ArkClient.ChatJSONWithUsage(ctx, r.ModelName, prompt)
 		if err != nil {
 			event := &adk.AgentEvent{
 				Err: errors.New("video prompt generation failed"),

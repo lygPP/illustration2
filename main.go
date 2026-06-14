@@ -65,6 +65,7 @@ func main() {
 	protected.POST("/me/avatar", authHandler.UploadAvatar)
 	protected.GET("/me/history", authHandler.History)
 	protected.GET("/me/usage", authHandler.Usage)
+	protected.GET("/me/agent-works/:session_id", authHandler.AgentWork)
 	protected.GET("/personas", authHandler.ListPersonas)
 	protected.POST("/personas", authHandler.CreatePersona)
 	protected.PUT("/personas/:persona_id", authHandler.UpdatePersona)
@@ -83,6 +84,8 @@ func main() {
 	protected.GET("/video/:task_id", genHandler.HandleGetVideo)
 	protected.POST("/agent/stream", agentStreamHandler.HandleAgentStream)
 	protected.POST("/agent/resume", agentStreamHandler.HandleAgentResume)
+	protected.POST("/agent/recover", agentStreamHandler.HandleAgentRecover)
+	protected.POST("/agent/stop", agentStreamHandler.HandleAgentStop)
 
 	admin := protected.Group("/admin")
 	admin.Use(auth.RequireSuperAdmin())

@@ -36,7 +36,7 @@ const (
 	CmdNoNeedToEdit          = "no need to edit"
 )
 
-const storyWriterInstruction = `You are a children's story writer. Generate a 3-chapter story based on the user's theme. Each chapter_body should be sized for about a 10-second narrated video segment: concise, visually actionable, and roughly 35-55 Chinese characters or 1-2 short sentences. Avoid long paragraphs, side explanations, and multiple major scene changes inside one chapter. Respond in valid JSON format: {"chapters": [{"chapter_title": "...", "chapter_body": "..."}]}`
+const storyWriterInstruction = `You are a children's story writer. Generate a 3-chapter story based on the user's theme. Each chapter_body should be an appropriate, brief length: concise, visually actionable, and easy to narrate. Avoid long paragraphs, side explanations, and multiple major scene changes inside one chapter. Respond in valid JSON format: {"chapters": [{"chapter_title": "...", "chapter_body": "..."}]}`
 const promptEngineerInstruction = `You are a prompt engineer. For each chapter, add a detailed "image_prompt". Respond in valid JSON.`
 
 type SessionState struct {

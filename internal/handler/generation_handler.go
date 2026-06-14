@@ -3,6 +3,7 @@ package handler
 import (
 	"illustration2/internal/auth"
 	"illustration2/internal/service"
+	"illustration2/internal/usage"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,7 +33,8 @@ func (h *GenerationHandler) HandleGeneration(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.Generate(c.Request.Context(), req)
+	ctx := usage.WithContext(c.Request.Context(), user.ID, h.store)
+	resp, err := h.svc.Generate(ctx, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -42,7 +44,6 @@ func (h *GenerationHandler) HandleGeneration(c *gin.Context) {
 	if modelName == "" {
 		modelName = req.GenerateResourceType
 	}
-	_ = h.store.AddUsage(user.ID, modelName, auth.EstimateTokens(req.Prompt), estimateCompletionTokens(resp))
 	_ = h.store.AddHistory(user.ID, auth.GenerationHistory{
 		Kind:         "generate",
 		ResourceType: req.GenerateResourceType,
@@ -114,14 +115,4 @@ func previewURL(resp *service.GenerationResponse) string {
 		return ""
 	}
 	return resp.Images[0]
-}
-
-func estimateCompletionTokens(resp *service.GenerationResponse) int {
-	if resp == nil {
-		return 0
-	}
-	if resp.Message != "" {
-		return auth.EstimateTokens(resp.Message)
-	}
-	return len(resp.Images) * 32
 }
