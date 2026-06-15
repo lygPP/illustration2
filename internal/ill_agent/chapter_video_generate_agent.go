@@ -94,6 +94,7 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		ctx2, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		narrationSlots := make(chan struct{}, narrationConcurrencyLimit())
 		resCh := make(chan chapterMediaResult, len(chapterIndices))
 		var wg sync.WaitGroup
 		wg.Add(len(chapterIndices))
@@ -123,6 +124,15 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 					cancel()
 					return
 				}
+				if existingURL := strings.TrimSpace(sessionState.NarratedChapterVideoURLs[chapterIdx]); existingURL != "" {
+					resCh <- chapterMediaResult{
+						chapter:          chapterIdx,
+						videoURL:         firstNonEmptyString(sessionState.ChapterVideoURLs[chapterIdx], existingURL),
+						audioURL:         sessionState.ChapterAudioURLs[chapterIdx],
+						narratedVideoURL: existingURL,
+					}
+					return
+				}
 
 				var videoURL string
 				var audioURL string
@@ -138,6 +148,11 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 				go func() {
 					defer chapterWG.Done()
 					chapter := sessionState.Story.Chapters[chapterIdx]
+					if err := acquireNarrationSlot(ctx2, narrationSlots); err != nil {
+						audioErr = fmt.Errorf("synthesize narration canceled for chapter %d: %w", chapterIdx+1, err)
+						return
+					}
+					defer releaseNarrationSlot(narrationSlots)
 					audioURL, audioPath, audioErr = r.synthesizeChapterNarration(ctx2, sessionState.SelectedVoiceType, chapter.Content, chapterIdx)
 				}()
 				chapterWG.Wait()
@@ -147,8 +162,12 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 					return
 				}
 				if audioErr != nil {
-					resCh <- chapterMediaResult{chapter: chapterIdx, err: audioErr}
-					cancel()
+					log.Printf("chapter %d narration failed, continue with silent video: %v\n", chapterIdx+1, audioErr)
+					resCh <- chapterMediaResult{
+						chapter:          chapterIdx,
+						videoURL:         videoURL,
+						narratedVideoURL: videoURL,
+					}
 					return
 				}
 
@@ -254,6 +273,7 @@ func (r ChapterVideoGenerateAgent) generateChapterVideo(ctx context.Context, vid
 	if err != nil {
 		return "", fmt.Errorf("create task failed for chapter %d: %w", chapterIdx+1, err)
 	}
+	log.Printf("chapter %d video task created: %s\n", chapterIdx+1, taskID)
 
 	var status string
 	var videoURL string
@@ -265,6 +285,7 @@ func (r ChapterVideoGenerateAgent) generateChapterVideo(ctx context.Context, vid
 			return "", fmt.Errorf("get task failed for chapter %d: %w", chapterIdx+1, err)
 		}
 		if status == "succeeded" && videoURL != "" {
+			log.Printf("chapter %d video generated: %s\n", chapterIdx+1, videoURL)
 			return videoURL, nil
 		}
 		if status == "failed" {
@@ -283,6 +304,39 @@ func (r ChapterVideoGenerateAgent) generateChapterVideo(ctx context.Context, vid
 
 func boolPtr(value bool) *bool {
 	return &value
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func narrationConcurrencyLimit() int {
+	limit := envInt("AGENT_NARRATION_CONCURRENCY", 2)
+	if limit < 1 {
+		return 1
+	}
+	return limit
+}
+
+func acquireNarrationSlot(ctx context.Context, slots chan struct{}) error {
+	select {
+	case slots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func releaseNarrationSlot(slots chan struct{}) {
+	select {
+	case <-slots:
+	default:
+	}
 }
 
 func (r ChapterVideoGenerateAgent) synthesizeChapterNarration(ctx context.Context, voiceType, text string, chapterIdx int) (string, string, error) {

@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const defaultVideoTransitionSeconds = 1.0
+
 func ConcatVideos(ctx context.Context, inputVideos []string, outputPath string) error {
 	if len(inputVideos) < 2 {
 		return fmt.Errorf("at least 2 input videos required")
@@ -27,6 +29,10 @@ func ConcatVideos(ctx context.Context, inputVideos []string, outputPath string) 
 		if _, err := os.Stat(video); os.IsNotExist(err) {
 			return fmt.Errorf("video file not found: %s", video)
 		}
+	}
+
+	if err := ConcatVideosWithFade(ctx, inputVideos, outputPath, defaultVideoTransitionSeconds); err == nil {
+		return nil
 	}
 
 	listFile, err := createConcatListFile(inputVideos)
@@ -49,6 +55,99 @@ func ConcatVideos(ctx context.Context, inputVideos []string, outputPath string) 
 	}
 
 	return nil
+}
+
+func ConcatVideosWithFade(ctx context.Context, inputVideos []string, outputPath string, transitionSeconds float64) error {
+	if len(inputVideos) < 2 {
+		return fmt.Errorf("at least 2 input videos required")
+	}
+	if strings.TrimSpace(outputPath) == "" {
+		return fmt.Errorf("output path required")
+	}
+	if transitionSeconds <= 0 {
+		transitionSeconds = defaultVideoTransitionSeconds
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
+
+	durations := make([]float64, len(inputVideos))
+	args := []string{"-y"}
+	for i, video := range inputVideos {
+		if _, err := os.Stat(video); os.IsNotExist(err) {
+			return fmt.Errorf("video file not found: %s", video)
+		}
+		duration, err := probeVideoDuration(ctx, video)
+		if err != nil {
+			return err
+		}
+		if duration <= transitionSeconds {
+			return fmt.Errorf("video duration %.3fs must be greater than transition %.3fs: %s", duration, transitionSeconds, video)
+		}
+		durations[i] = duration
+		args = append(args, "-i", video)
+	}
+	args = append(args, "-filter_complex", buildFadeFilter(len(inputVideos), durations, transitionSeconds))
+	args = append(args,
+		"-map", fmt.Sprintf("[v%d]", len(inputVideos)-1),
+		"-map", fmt.Sprintf("[a%d]", len(inputVideos)-1),
+		"-c:v", "libx264",
+		"-preset", "veryfast",
+		"-crf", "18",
+		"-pix_fmt", "yuv420p",
+		"-c:a", "aac",
+		"-movflags", "+faststart",
+		outputPath,
+	)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg fade concat failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func buildFadeFilter(count int, durations []float64, transitionSeconds float64) string {
+	var b strings.Builder
+	for i := 0; i < count; i++ {
+		fmt.Fprintf(&b, "[%d:v]settb=AVTB,setpts=PTS-STARTPTS,format=yuv420p[v%d0];", i, i)
+		fmt.Fprintf(&b, "[%d:a]asetpts=PTS-STARTPTS[a%d0];", i, i)
+	}
+
+	videoIn := "[v00]"
+	audioIn := "[a00]"
+	offset := durations[0] - transitionSeconds
+	for i := 1; i < count; i++ {
+		vOut := fmt.Sprintf("[v%d]", i)
+		aOut := fmt.Sprintf("[a%d]", i)
+		fmt.Fprintf(&b, "%s[v%d0]xfade=transition=fade:duration=%.3f:offset=%.3f%s;", videoIn, i, transitionSeconds, offset, vOut)
+		fmt.Fprintf(&b, "%s[a%d0]acrossfade=d=%.3f:c1=tri:c2=tri%s;", audioIn, i, transitionSeconds, aOut)
+		videoIn = vOut
+		audioIn = aOut
+		if i < count-1 {
+			offset += durations[i] - transitionSeconds
+		}
+	}
+	return b.String()
+}
+
+func probeVideoDuration(ctx context.Context, video string) (float64, error) {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		video,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe duration failed: %w", err)
+	}
+	duration, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse video duration failed: %w", err)
+	}
+	return duration, nil
 }
 
 func createConcatListFile(videos []string) (string, error) {

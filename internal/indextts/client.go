@@ -18,7 +18,10 @@ import (
 	"time"
 )
 
-const defaultBaseURL = "http://127.0.0.1:7860"
+const (
+	defaultBaseURL        = "http://127.0.0.1:7860"
+	defaultTimeoutSeconds = 3600
+)
 
 type Client struct {
 	BaseURL    string
@@ -35,7 +38,7 @@ type SynthesisParams struct {
 }
 
 func NewClientFromEnv() *Client {
-	timeoutSeconds := envInt("INDEX_TTS_TIMEOUT_SECONDS", 1200)
+	timeoutSeconds := envInt("INDEX_TTS_TIMEOUT_SECONDS", defaultTimeoutSeconds)
 	path := firstNonEmpty(os.Getenv("INDEX_TTS_SYNTHESIS_PATH"), "/tts")
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

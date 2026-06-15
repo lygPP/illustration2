@@ -107,6 +107,16 @@ func InferRestartPlan(ctx context.Context, userInput string, state *Illustration
 		}, latest, input, forceRestart)
 	}
 
+	if !forceRestart && !HasExplicitRestartIntent(input) {
+		return normalizeRestartPlan(RestartPlan{
+			ShouldRestart: false,
+			Stage:         StageCurrent,
+			ChapterIndex:  -1,
+			Feedback:      input,
+			Reason:        "no explicit restart intent; treat as ordinary review feedback",
+		}, latest, input, forceRestart)
+	}
+
 	client := volc.NewArkClientDefault()
 	if client.Mock {
 		plan := inferRestartPlanHeuristic(input, latest)
@@ -294,8 +304,9 @@ func normalizeRestartPlan(plan RestartPlan, latest, input string, forceRestart b
 
 func inferRestartPlanHeuristic(input, latest string) RestartPlan {
 	lower := strings.ToLower(strings.TrimSpace(input))
+	explicitRestart := HasExplicitRestartIntent(lower)
 	plan := RestartPlan{
-		ShouldRestart: looksLikeRestart(lower),
+		ShouldRestart: explicitRestart,
 		Stage:         StageCurrent,
 		ChapterIndex:  extractChapterIndex(lower),
 		Feedback:      input,
@@ -307,37 +318,64 @@ func inferRestartPlanHeuristic(input, latest string) RestartPlan {
 	}
 	if strings.Contains(lower, "故事") || strings.Contains(lower, "主题") || strings.Contains(lower, "章节内容") {
 		plan.Stage = StageStory
-		plan.ShouldRestart = true
-		return plan
-	}
-	if strings.Contains(lower, "角色") || strings.Contains(lower, "形象") {
-		plan.Stage = StageCharacter
-		plan.ShouldRestart = true
+		plan.ShouldRestart = explicitRestart
 		return plan
 	}
 	if strings.Contains(lower, "首帧") || strings.Contains(lower, "图片") || strings.Contains(lower, "画面") || strings.Contains(lower, "插画") {
 		plan.Stage = StageImage
-		plan.ShouldRestart = true
+		plan.ShouldRestart = explicitRestart
+		return plan
+	}
+	if strings.Contains(lower, "角色") || strings.Contains(lower, "形象") {
+		plan.Stage = StageCharacter
+		plan.ShouldRestart = explicitRestart
 		return plan
 	}
 	if strings.Contains(lower, "音色") || strings.Contains(lower, "配音") || strings.Contains(lower, "声音") {
 		plan.Stage = StageVoiceSelection
-		plan.ShouldRestart = true
+		plan.ShouldRestart = explicitRestart
 		return plan
 	}
 	if strings.Contains(lower, "视频") || strings.Contains(lower, "解说") || strings.Contains(lower, "合成") {
 		plan.Stage = StageChapterVideo
-		plan.ShouldRestart = true
+		plan.ShouldRestart = explicitRestart
 		return plan
 	}
 	plan.Stage = latest
 	return plan
 }
 
-func looksLikeRestart(input string) bool {
-	keywords := []string{"回到", "从", "重新", "重跑", "重做", "重新执行", "重新生成", "跳到", "开始跑", "恢复执行"}
+func HasExplicitRestartIntent(input string) bool {
+	input = strings.ToLower(strings.TrimSpace(input))
+	if input == "" {
+		return false
+	}
+	keywords := []string{
+		"回到",
+		"退回",
+		"返回到",
+		"重新",
+		"重跑",
+		"重做",
+		"重来",
+		"再跑",
+		"重新执行",
+		"重新生成",
+		"跳到",
+		"开始跑",
+		"恢复执行",
+	}
 	for _, keyword := range keywords {
 		if strings.Contains(input, keyword) {
+			return true
+		}
+	}
+	fromPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`从.+(开始|重新|重跑|重做|执行|生成|跑)`),
+		regexp.MustCompile(`由.+(开始|重新|重跑|重做|执行|生成|跑)`),
+	}
+	for _, pattern := range fromPatterns {
+		if pattern.MatchString(input) {
 			return true
 		}
 	}
