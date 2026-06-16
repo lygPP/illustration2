@@ -245,7 +245,7 @@ func (h *AgentStreamHandler) HandleAgentStream(c *gin.Context) {
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: sessionID,
 			// })
-			if finalData.Action != "interrupted" && (finalData.AgentName == "视频生成助手" || finalData.AgentName == "章节视频生成助手") {
+			if finalData.Action != "interrupted" && isFinalMediaAgent(finalData.AgentName) {
 				if finalData.Output != nil {
 					reInfo := make([]map[string]interface{}, 0)
 					json.Unmarshal([]byte(finalData.Message), &reInfo)
@@ -512,7 +512,7 @@ func (h *AgentStreamHandler) HandleAgentResume(c *gin.Context) { // ignore_secur
 			// 	Message:   "Agent execution completed",
 			// 	SessionID: req.SessionID,
 			// })
-			if finalData.Action != "interrupted" && (finalData.AgentName == "视频生成助手" || finalData.AgentName == "章节视频生成助手") {
+			if finalData.Action != "interrupted" && isFinalMediaAgent(finalData.AgentName) {
 				if finalData.Output != nil {
 					reInfo := make([]map[string]interface{}, 0)
 					json.Unmarshal([]byte(finalData.Message), &reInfo)
@@ -726,7 +726,7 @@ func (h *AgentStreamHandler) streamAgentIterator(c *gin.Context, ctx context.Con
 				SessionID: sessionID,
 			})
 		case <-doneChan:
-			if finalData.Action != "interrupted" && (finalData.AgentName == "视频生成助手" || finalData.AgentName == "章节视频生成助手") {
+			if finalData.Action != "interrupted" && isFinalMediaAgent(finalData.AgentName) {
 				if finalData.Output != nil {
 					reInfo := make([]map[string]interface{}, 0)
 					json.Unmarshal([]byte(finalData.Message), &reInfo)
@@ -755,5 +755,14 @@ func (h *AgentStreamHandler) streamAgentIterator(c *gin.Context, ctx context.Con
 			log.Println("Client disconnected")
 			return
 		}
+	}
+}
+
+func isFinalMediaAgent(agentName string) bool {
+	switch agentName {
+	case "视频生成助手", "章节视频生成助手", "章节语音合成助手":
+		return true
+	default:
+		return false
 	}
 }

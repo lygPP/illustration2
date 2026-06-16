@@ -153,8 +153,9 @@ func NewMKAgent(ctx context.Context) adk.Agent {
 			NewStoryAgent(ctx),
 			NewCharacterAgent(ctx),
 			NewImageAgent(ctx),
-			NewVoiceSelectionAgent(ctx),
 			NewChapterVideoAgent(ctx),
+			NewVoiceSelectionAgent(ctx),
+			NewChapterNarrationAgent(ctx),
 		},
 	})
 	if err != nil {

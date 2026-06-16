@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"illustration2/internal/indextts"
-	"illustration2/internal/usage"
 	"illustration2/internal/utils"
 	"illustration2/internal/volc"
 	"log"
@@ -28,13 +26,9 @@ type ChapterVideoGenerateAgent struct {
 }
 
 type chapterMediaResult struct {
-	chapter           int
-	videoURL          string
-	audioURL          string
-	audioPath         string
-	narratedVideoURL  string
-	narratedVideoPath string
-	err               error
+	chapter  int
+	videoURL string
+	err      error
 }
 
 func NewChapterVideoGenerateAgent(ctx context.Context) adk.Agent {
@@ -75,10 +69,6 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 			gen.Send(&adk.AgentEvent{Err: errors.New("confirmed first frame images are empty, cannot generate chapter videos")})
 			return
 		}
-		if strings.TrimSpace(sessionState.SelectedVoiceType) == "" {
-			gen.Send(&adk.AgentEvent{Err: errors.New("selected voice is empty, cannot synthesize chapter narrations")})
-			return
-		}
 
 		promptByChapter := make(map[int]string, len(sessionState.ChapterVideoPrompts))
 		for _, p := range sessionState.ChapterVideoPrompts {
@@ -94,7 +84,6 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		ctx2, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		narrationSlots := make(chan struct{}, narrationConcurrencyLimit())
 		resCh := make(chan chapterMediaResult, len(chapterIndices))
 		var wg sync.WaitGroup
 		wg.Add(len(chapterIndices))
@@ -124,67 +113,23 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 					cancel()
 					return
 				}
-				if existingURL := strings.TrimSpace(sessionState.NarratedChapterVideoURLs[chapterIdx]); existingURL != "" {
+				if existingURL := strings.TrimSpace(sessionState.ChapterVideoURLs[chapterIdx]); existingURL != "" {
 					resCh <- chapterMediaResult{
-						chapter:          chapterIdx,
-						videoURL:         firstNonEmptyString(sessionState.ChapterVideoURLs[chapterIdx], existingURL),
-						audioURL:         sessionState.ChapterAudioURLs[chapterIdx],
-						narratedVideoURL: existingURL,
+						chapter:  chapterIdx,
+						videoURL: existingURL,
 					}
 					return
 				}
 
-				var videoURL string
-				var audioURL string
-				var audioPath string
-				var videoErr error
-				var audioErr error
-				var chapterWG sync.WaitGroup
-				chapterWG.Add(2)
-				go func() {
-					defer chapterWG.Done()
-					videoURL, videoErr = r.generateChapterVideo(ctx2, videoPrompt, firstFrameImages[0], chapterIdx)
-				}()
-				go func() {
-					defer chapterWG.Done()
-					chapter := sessionState.Story.Chapters[chapterIdx]
-					if err := acquireNarrationSlot(ctx2, narrationSlots); err != nil {
-						audioErr = fmt.Errorf("synthesize narration canceled for chapter %d: %w", chapterIdx+1, err)
-						return
-					}
-					defer releaseNarrationSlot(narrationSlots)
-					audioURL, audioPath, audioErr = r.synthesizeChapterNarration(ctx2, sessionState.SelectedVoiceType, chapter.Content, chapterIdx)
-				}()
-				chapterWG.Wait()
-				if videoErr != nil {
-					resCh <- chapterMediaResult{chapter: chapterIdx, err: videoErr}
+				videoURL, err := r.generateChapterVideo(ctx2, videoPrompt, firstFrameImages[0], chapterIdx)
+				if err != nil {
+					resCh <- chapterMediaResult{chapter: chapterIdx, err: err}
 					cancel()
 					return
 				}
-				if audioErr != nil {
-					log.Printf("chapter %d narration failed, continue with silent video: %v\n", chapterIdx+1, audioErr)
-					resCh <- chapterMediaResult{
-						chapter:          chapterIdx,
-						videoURL:         videoURL,
-						narratedVideoURL: videoURL,
-					}
-					return
-				}
-
-				narratedPath := filepath.Join("resource", "agent_video", fmt.Sprintf("%s_chapter_%02d_narrated_%s.mp4", safeFileStem(GetSessionID(ctx2)), chapterIdx+1, time.Now().Format("20060102_150405")))
-				if err := utils.MuxVideoWithAudioFromURL(ctx2, videoURL, audioPath, narratedPath); err != nil {
-					resCh <- chapterMediaResult{chapter: chapterIdx, err: fmt.Errorf("mux video and narration failed for chapter %d: %w", chapterIdx+1, err)}
-					cancel()
-					return
-				}
-
 				resCh <- chapterMediaResult{
-					chapter:           chapterIdx,
-					videoURL:          videoURL,
-					audioURL:          audioURL,
-					audioPath:         audioPath,
-					narratedVideoURL:  utils.ResourceURL(narratedPath),
-					narratedVideoPath: narratedPath,
+					chapter:  chapterIdx,
+					videoURL: videoURL,
 				}
 			}()
 		}
@@ -193,48 +138,34 @@ func (r ChapterVideoGenerateAgent) Run(ctx context.Context, input *adk.AgentInpu
 		close(resCh)
 
 		chapterVideoURLs := make(map[int]string, len(chapterIndices))
-		chapterAudioURLs := make(map[int]string, len(chapterIndices))
-		narratedChapterVideoURLs := make(map[int]string, len(chapterIndices))
 		for r := range resCh {
 			if r.err != nil {
 				gen.Send(&adk.AgentEvent{Err: r.err})
 				return
 			}
 			chapterVideoURLs[r.chapter] = r.videoURL
-			chapterAudioURLs[r.chapter] = r.audioURL
-			narratedChapterVideoURLs[r.chapter] = r.narratedVideoURL
-		}
-
-		finalVideoURL, err := buildFinalNarratedVideo(ctx, sessionState, chapterIndices, narratedChapterVideoURLs)
-		if err != nil {
-			gen.Send(&adk.AgentEvent{Err: err})
-			return
 		}
 
 		sessionState.ChapterVideoURLs = chapterVideoURLs
-		sessionState.ChapterAudioURLs = chapterAudioURLs
-		sessionState.NarratedChapterVideoURLs = narratedChapterVideoURLs
-		sessionState.VideoURL = finalVideoURL
+		sessionState.VideoURL = ""
 		sessionState.State = "chapter_video_generate"
 		SaveSessionState(ctx, sessionState)
 
-		infoList := make([]map[string]interface{}, 0, len(chapterIndices)+2)
+		infoList := make([]map[string]interface{}, 0, len(chapterIndices)+1)
 		infoList = append(infoList, map[string]interface{}{
-			"text":      "已生成完整解说视频：",
-			"videoUrls": []string{finalVideoURL},
+			"text": "已生成每个章节视频，下一步请选择音色生成解说音频：",
 		})
 		for _, idx := range chapterIndices {
-			if url := narratedChapterVideoURLs[idx]; url != "" {
+			if url := chapterVideoURLs[idx]; url != "" {
 				infoList = append(infoList, map[string]interface{}{
-					"text":      fmt.Sprintf("第%d章带解说视频：", idx+1),
+					"text":      fmt.Sprintf("第%d章视频：", idx+1),
 					"videoUrls": []string{url},
-					"audioUrls": []string{chapterAudioURLs[idx]},
 				})
 			}
 		}
 		data, _ := json.Marshal(infoList)
 
-		log.Printf("chapterVideoURLs: %+v narratedChapterVideoURLs: %+v finalVideoURL: %s\n", chapterVideoURLs, narratedChapterVideoURLs, finalVideoURL)
+		log.Printf("chapterVideoURLs: %+v\n", chapterVideoURLs)
 
 		gen.Send(&adk.AgentEvent{
 			Output: &adk.AgentOutput{
@@ -313,73 +244,6 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func narrationConcurrencyLimit() int {
-	limit := envInt("AGENT_NARRATION_CONCURRENCY", 2)
-	if limit < 1 {
-		return 1
-	}
-	return limit
-}
-
-func acquireNarrationSlot(ctx context.Context, slots chan struct{}) error {
-	select {
-	case slots <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func releaseNarrationSlot(slots chan struct{}) {
-	select {
-	case <-slots:
-	default:
-	}
-}
-
-func (r ChapterVideoGenerateAgent) synthesizeChapterNarration(ctx context.Context, voiceType, text string, chapterIdx int) (string, string, error) {
-	audio, err := indextts.NewClientFromEnv().Synthesize(ctx, indextts.SynthesisParams{
-		Text:              strings.TrimSpace(text),
-		ReferenceAudioURL: strings.TrimSpace(voiceType),
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("synthesize narration failed for chapter %d: %w", chapterIdx+1, err)
-	}
-	audioPath := filepath.Join("resource", "index_tts", "chapters", fmt.Sprintf("%s_chapter_%02d_%s.mp3", safeFileStem(GetSessionID(ctx)), chapterIdx+1, time.Now().Format("20060102_150405")))
-	if err := utils.SaveAudioFile(audio, audioPath); err != nil {
-		return "", "", fmt.Errorf("save narration failed for chapter %d: %w", chapterIdx+1, err)
-	}
-	_ = usage.Record(ctx, "index-tts", 0, 0)
-	return utils.ResourceURL(audioPath), audioPath, nil
-}
-
-func buildFinalNarratedVideo(ctx context.Context, sessionState *IllustrationSessionState, chapterIndices []int, narratedURLs map[int]string) (string, error) {
-	if len(chapterIndices) == 0 {
-		return "", errors.New("no chapter videos generated")
-	}
-	if len(chapterIndices) == 1 {
-		return narratedURLs[chapterIndices[0]], nil
-	}
-
-	videoURLList := make([]string, 0, len(chapterIndices))
-	for _, idx := range chapterIndices {
-		if narratedURLs[idx] == "" {
-			return "", fmt.Errorf("chapter %d narrated video is empty", idx+1)
-		}
-		videoURLList = append(videoURLList, narratedURLs[idx])
-	}
-
-	theme := "story"
-	if sessionState.Story != nil && strings.TrimSpace(sessionState.Story.Theme) != "" {
-		theme = safeFileStem(sessionState.Story.Theme)
-	}
-	outputPath := filepath.Join("resource", "agent_video", fmt.Sprintf("%s_complete_%s.mp4", theme, time.Now().Format("20060102_150405")))
-	if err := utils.ConcatVideosFromURLs(ctx, videoURLList, outputPath); err != nil {
-		return "", fmt.Errorf("concat narrated videos failed: %w", err)
-	}
-	return utils.ResourceURL(outputPath), nil
 }
 
 func safeFileStem(value string) string {

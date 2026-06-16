@@ -20,7 +20,7 @@ type VoiceSelectionAgent struct {
 func NewVoiceSelectionAgent(ctx context.Context) adk.Agent {
 	return VoiceSelectionAgent{
 		AgentName: "音色选择助手",
-		AgentDesc: "在章节视频生成前让用户选择解说音色",
+		AgentDesc: "在章节视频生成后让用户选择解说音色",
 	}
 }
 
@@ -138,7 +138,7 @@ func voiceSelectionInfo(voices []auth.VoiceProfile, message string) []map[string
 	if message != "" {
 		info = append(info, map[string]interface{}{"text": message})
 	}
-	info = append(info, map[string]interface{}{"text": "所有章节首帧图已确认，请选择用于章节解说的音色。可回复序号、音色ID或音色名称。"})
+	info = append(info, map[string]interface{}{"text": "章节视频已生成，请选择用于章节解说语音合成的音色。可回复序号、音色ID或音色名称。"})
 	for i, voice := range voices {
 		info = append(info, map[string]interface{}{
 			"text":            fmt.Sprintf("%d. %s", i+1, voice.Name),

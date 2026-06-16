@@ -22,6 +22,7 @@ const (
 	StageImage          = "image"
 	StageVoiceSelection = "voice_selection"
 	StageChapterVideo   = "chapter_video"
+	StageNarration      = "narration"
 )
 
 const restartPlanModelName = "ep-20260608120832-fq5kh"
@@ -30,8 +31,9 @@ var stageRank = map[string]int{
 	StageStory:          0,
 	StageCharacter:      1,
 	StageImage:          2,
-	StageVoiceSelection: 3,
-	StageChapterVideo:   4,
+	StageChapterVideo:   3,
+	StageVoiceSelection: 4,
+	StageNarration:      5,
 }
 
 type RestartPlan struct {
@@ -85,10 +87,12 @@ func NormalizeRestartStage(stage string) string {
 		return StageCharacter
 	case StageImage, "images", "image_prompt", "image_generate", "image_review", "first_frame", "首帧", "图片", "画面":
 		return StageImage
-	case StageVoiceSelection, "voice", "voice_selected", "音色", "配音":
+	case StageVoiceSelection, "voice", "voice_selected", "音色":
 		return StageVoiceSelection
 	case StageChapterVideo, "video", "chapter_video_prompt", "chapter_video_generate", "章节视频", "视频":
 		return StageChapterVideo
+	case StageNarration, "chapter_narration", "chapter_narration_generate", "audio", "tts", "speech", "narration_audio", "解说", "配音", "语音", "音频", "音视频合成", "合成":
+		return StageNarration
 	default:
 		return ""
 	}
@@ -130,14 +134,15 @@ Workflow stages, in order:
 - "story": story and chapter text generation
 - "character": global character profiles and reference images
 - "image": chapter first-frame image prompts, first-frame generation, and image review
+- "chapter_video": chapter video prompts and silent chapter video generation
 - "voice_selection": narration voice selection
-- "chapter_video": chapter video prompts, chapter videos, narration audio, and final merged video
+- "narration": chapter narration audio synthesis, chapter audio/video muxing, and final merged video
 - "current": continue from the latest incomplete/current position without intentionally jumping back
 
 Return strict JSON only:
 {
   "should_restart": true,
-  "stage": "story|character|image|voice_selection|chapter_video|current",
+  "stage": "story|character|image|chapter_video|voice_selection|narration|current",
   "chapter_index": -1,
   "feedback": "cleaned user feedback",
   "reason": "short reason in Chinese"
@@ -203,6 +208,8 @@ func ApplyRestartPlan(state *IllustrationSessionState, plan RestartPlan) {
 		state.State = StageVoiceSelection
 	case StageChapterVideo:
 		state.State = StageChapterVideo
+	case StageNarration:
+		state.State = StageNarration
 	}
 }
 
@@ -265,10 +272,16 @@ func LatestRunnableStage(state *IllustrationSessionState) string {
 	if FirstUnconfirmedChapter(state) >= 0 {
 		return StageImage
 	}
+	if !hasAllChapterVideos(state) {
+		return StageChapterVideo
+	}
 	if strings.TrimSpace(state.SelectedVoiceType) == "" {
 		return StageVoiceSelection
 	}
-	return StageChapterVideo
+	if !hasAllNarratedChapterVideos(state) {
+		return StageNarration
+	}
+	return StageNarration
 }
 
 func FirstUnconfirmedChapter(state *IllustrationSessionState) int {
@@ -331,18 +344,47 @@ func inferRestartPlanHeuristic(input, latest string) RestartPlan {
 		plan.ShouldRestart = explicitRestart
 		return plan
 	}
-	if strings.Contains(lower, "音色") || strings.Contains(lower, "配音") || strings.Contains(lower, "声音") {
+	if strings.Contains(lower, "音色") || strings.Contains(lower, "声音") {
 		plan.Stage = StageVoiceSelection
 		plan.ShouldRestart = explicitRestart
 		return plan
 	}
-	if strings.Contains(lower, "视频") || strings.Contains(lower, "解说") || strings.Contains(lower, "合成") {
+	if strings.Contains(lower, "语音") || strings.Contains(lower, "音频") || strings.Contains(lower, "解说") || strings.Contains(lower, "合成") {
+		plan.Stage = StageNarration
+		plan.ShouldRestart = explicitRestart
+		return plan
+	}
+	if strings.Contains(lower, "视频") {
 		plan.Stage = StageChapterVideo
 		plan.ShouldRestart = explicitRestart
 		return plan
 	}
 	plan.Stage = latest
 	return plan
+}
+
+func hasAllChapterVideos(state *IllustrationSessionState) bool {
+	if state == nil || state.Story == nil || len(state.Story.Chapters) == 0 {
+		return false
+	}
+	for i := range state.Story.Chapters {
+		if state.ChapterVideoURLs == nil || strings.TrimSpace(state.ChapterVideoURLs[i]) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func hasAllNarratedChapterVideos(state *IllustrationSessionState) bool {
+	if state == nil || state.Story == nil || len(state.Story.Chapters) == 0 {
+		return false
+	}
+	for i := range state.Story.Chapters {
+		if state.NarratedChapterVideoURLs == nil || strings.TrimSpace(state.NarratedChapterVideoURLs[i]) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func HasExplicitRestartIntent(input string) bool {
